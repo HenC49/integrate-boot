@@ -31,3 +31,6 @@ build/
 # IntelliJ IDEA
 .idea/
 out/
+
+# ZCode
+.zcode/

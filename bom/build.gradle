@@ -17,6 +17,8 @@ dependencies {
         // Spring Boot (versions resolved by spring-boot-dependencies)
         api(libs.spring.boot.starter)
         api(libs.spring.boot.starter.jdbc)
+        api(libs.spring.boot.autoconfigure)
+        api(libs.spring.boot.configuration.processor)
 
         // MyBatis-Flex
         api(libs.mybatis.flex.spring.boot4.starter)

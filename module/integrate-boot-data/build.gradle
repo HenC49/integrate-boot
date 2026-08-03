@@ -7,5 +7,11 @@ dependencies {
     api platform(project(':bom'))
 
     api(libs.mybatis.flex.spring.boot4.starter)
+    api(libs.spring.boot.starter)
     api(libs.spring.boot.starter.jdbc)
+    api(libs.spring.boot.autoconfigure)
+
+    // Generates configuration property metadata so IDEs can auto-complete
+    // and document the properties consumed by this module.
+    annotationProcessor(libs.spring.boot.configuration.processor)
 }
