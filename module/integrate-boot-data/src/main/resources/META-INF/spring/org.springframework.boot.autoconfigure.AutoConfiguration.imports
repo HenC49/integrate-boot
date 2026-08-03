@@ -1,1 +1,2 @@
 com.github.henc.integrateboot.data.DataAutoConfiguration
+com.github.henc.integrateboot.data.datasource.DynamicDataSourceAutoConfiguration

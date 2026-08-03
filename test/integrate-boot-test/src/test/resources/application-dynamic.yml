@@ -1,0 +1,25 @@
+# Profile for the dynamic datasource integration test. Two in-memory H2 databases are
+# configured under mybatis-flex.datasource; the first (master) is the default.
+spring:
+  sql:
+    init:
+      mode: always
+
+integrate-boot:
+  data:
+    datasource:
+      dynamic:
+        enabled: true
+
+mybatis-flex:
+  datasource:
+    master:
+      url: jdbc:h2:mem:master;DB_CLOSE_DELAY=-1;MODE=MySQL
+      driver-class-name: org.h2.Driver
+      username: sa
+      password:
+    slave:
+      url: jdbc:h2:mem:slave;DB_CLOSE_DELAY=-1;MODE=MySQL
+      driver-class-name: org.h2.Driver
+      username: sa
+      password:

@@ -91,6 +91,45 @@ mybatis-flex:
 
 Any setting under `mybatis-flex.configuration.*` overrides the defaults applied by this module.
 
+### Dynamic (multi) datasource
+
+Dynamic datasource is backed by MyBatis-Flex's built-in `FlexDataSource`. Opt in with a
+single switch, then declare each datasource under `mybatis-flex.datasource.<key>.*`:
+
+```yaml
+integrate-boot:
+  data:
+    datasource:
+      dynamic:
+        enabled: true
+
+mybatis-flex:
+  datasource:
+    master:                              # first entry is the default datasource
+      url: jdbc:mysql://host/db1
+      username: root
+      password: secret
+    slave:
+      url: jdbc:mysql://host/db2
+      username: root
+      password: secret
+```
+
+Switch datasources programmatically or with an annotation:
+
+```java
+// programmatic — scoped to the lambda, restores the default afterwards
+List<User> rows = DataSourceKey.use("slave", () -> userMapper.selectAll());
+
+// declarative — on a mapper interface or method
+@UseDataSource("slave")
+public interface SlaveMapper extends BaseMapper<SlaveEntity> { }
+```
+
+If the switch is on but no `mybatis-flex.datasource.*` is configured, the app fails fast
+with a clear message. Leave the switch off (the default) for single-datasource apps — their
+behaviour is unchanged.
+
 ## integrate-boot-starter
 
 Bootstrap entry point that aggregates the data layer and exposes the
