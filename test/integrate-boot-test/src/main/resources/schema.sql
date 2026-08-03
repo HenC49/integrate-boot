@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS `user` (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_name VARCHAR(64),
+    age INT
+);

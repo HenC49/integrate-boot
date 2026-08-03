@@ -1,0 +1,27 @@
+plugins {
+    id 'java'
+}
+
+// Use the JUnit 5 platform for running tests.
+test {
+    useJUnitPlatform()
+}
+
+dependencies {
+    // Use the project BOM as the single source of dependency versions.
+    implementation platform(project(':bom'))
+
+    // The whole stack comes transitively from the starter (data layer + @IntegrateBoot).
+    implementation project(':module:integrate-boot-starter')
+    implementation(libs.spring.boot.starter.web)
+
+    // H2 in-memory database for the demo; no external DB needed.
+    runtimeOnly(libs.h2)
+
+    testImplementation(libs.spring.boot.starter.test)
+
+    // Spring Boot 4.1 ships JUnit Platform 6.x, but Gradle 8.14's built-in
+    // junit-platform-launcher is 1.x. Align the launcher to the engine version so
+    // the JUnit Jupiter engine can discover and run tests.
+    testRuntimeOnly(libs.junit.platform.launcher)
+}

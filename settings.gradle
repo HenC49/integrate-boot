@@ -3,6 +3,7 @@ rootProject.name = 'integrate-boot'
 include('bom')
 include('module:integrate-boot-data')
 include('module:integrate-boot-starter')
+include('test:integrate-boot-test')
 
 dependencyResolutionManagement {
     repositories {

@@ -7,9 +7,11 @@ A foundational framework for business systems, encapsulating core capabilities.
 ```
 integrate-boot
 ├── bom                          # BOM (Bill of Materials) — dependency version management
-└── module
-    ├── integrate-boot-data      # Data-access integration (MyBatis-Flex + Spring Boot)
-    └── integrate-boot-starter   # Bootstrap entry: @IntegrateBoot annotation + aggregated deps
+├── module
+│   ├── integrate-boot-data      # Data-access integration (MyBatis-Flex + Spring Boot)
+│   └── integrate-boot-starter   # Bootstrap entry: @IntegrateBoot annotation + aggregated deps
+└── test
+    └── integrate-boot-test      # Sample app exercising the modules end-to-end
 ```
 
 ## Build
@@ -158,3 +160,14 @@ long as it follows the layering rules below:
    To scan additional packages beyond the conventions, add a regular `@ComponentScan`
    next to `@IntegrateBoot`, or fall back to `@SpringBootApplication`.
 
+## test/integrate-boot-test
+
+Sample application that boots the whole stack with `@IntegrateBoot` over an in-memory H2
+database (no external setup) and verifies the modules end-to-end: conventional layer
+scanning, MyBatis-Flex mapper access, transactions, and underscore-to-camelCase mapping.
+
+Run the integration tests:
+
+```bash
+./gradlew :test:integrate-boot-test:test
+```
