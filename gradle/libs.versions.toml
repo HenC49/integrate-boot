@@ -1,0 +1,12 @@
+[versions]
+spring-boot = "4.1.0"
+mybatis-flex = "1.11.8"
+
+[libraries]
+# Spring Boot
+spring-boot-dependencies = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
+spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter" }
+spring-boot-starter-jdbc = { module = "org.springframework.boot:spring-boot-starter-jdbc" }
+
+# MyBatis-Flex
+mybatis-flex-spring-boot4-starter = { module = "com.mybatis-flex:mybatis-flex-spring-boot4-starter", version.ref = "mybatis-flex" }

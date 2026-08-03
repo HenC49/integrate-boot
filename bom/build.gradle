@@ -1,0 +1,18 @@
+plugins {
+    id 'java-platform'
+}
+
+// Allow importing other BOMs (e.g. spring-boot-dependencies) into this platform.
+javaPlatform {
+    allowDependencies()
+}
+
+dependencies {
+    // Inherit the Spring Boot dependency management.
+    api platform(libs.spring.boot.dependencies)
+
+    // Declare versions managed by this BOM.
+    constraints {
+        api(libs.mybatis.flex.spring.boot4.starter)
+    }
+}

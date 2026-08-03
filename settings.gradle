@@ -1,0 +1,10 @@
+rootProject.name = 'integrate-boot'
+
+include('bom')
+include('modules:integrate-boot-data')
+
+dependencyResolutionManagement {
+    repositories {
+        mavenCentral()
+    }
+}
