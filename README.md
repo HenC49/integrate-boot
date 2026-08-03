@@ -2,12 +2,12 @@
 
 A foundational framework for business systems, encapsulating core capabilities.
 
-## Modules
+## Module
 
 ```
 integrate-boot
 ├── bom                          # BOM (Bill of Materials) — dependency version management
-└── modules
+└── module
     └── integrate-boot-data      # Data-access integration (MyBatis-Flex + Spring Boot)
 ```
 

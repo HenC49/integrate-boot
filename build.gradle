@@ -1,2 +1,14 @@
 // Root build script for the integrate-boot multi-module project.
 // The root project is an aggregator only; it does not apply any JVM plugin.
+
+subprojects {
+    plugins.withType(JavaPlugin).tap {
+        configureEach {
+            java {
+                toolchain {
+                    languageVersion = JavaLanguageVersion.of(21)
+                }
+            }
+        }
+    }
+}

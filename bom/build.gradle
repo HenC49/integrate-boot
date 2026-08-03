@@ -11,8 +11,14 @@ dependencies {
     // Inherit the Spring Boot dependency management.
     api platform(libs.spring.boot.dependencies)
 
-    // Declare versions managed by this BOM.
+    // Declare versions managed by this BOM. Spring Boot artifacts inherit their
+    // versions from spring-boot-dependencies above; other libraries are pinned here.
     constraints {
+        // Spring Boot (versions resolved by spring-boot-dependencies)
+        api(libs.spring.boot.starter)
+        api(libs.spring.boot.starter.jdbc)
+
+        // MyBatis-Flex
         api(libs.mybatis.flex.spring.boot4.starter)
     }
 }

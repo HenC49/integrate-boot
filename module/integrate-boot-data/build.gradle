@@ -1,0 +1,11 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    // Use the project BOM as the single source of dependency versions.
+    api platform(project(':bom'))
+
+    api(libs.mybatis.flex.spring.boot4.starter)
+    api(libs.spring.boot.starter.jdbc)
+}
