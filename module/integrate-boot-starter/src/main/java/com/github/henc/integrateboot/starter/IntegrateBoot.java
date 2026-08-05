@@ -3,6 +3,7 @@ package com.github.henc.integrateboot.starter;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.ComponentScan;
 
 import java.lang.annotation.Documented;
@@ -47,7 +48,12 @@ import java.lang.annotation.Target;
  *
  * <p>Transitively pulling in {@code integrate-boot-starter} also brings the
  * {@code integrate-boot-data} module, so the data layer (MyBatis-Flex, transactions,
- * underscore-to-camelCase mapping) is wired up automatically.
+ * underscore-to-camelCase mapping) is wired up automatically. The
+ * {@code integrate-boot-cache} module ships two Caffeine-backed cache managers
+ * ({@code cacheManagerPermanent} and the {@code @Primary cacheManagerExpiring}); since
+ * {@code @IntegrateBoot} is meta-annotated with {@link EnableCaching}, declarative caching
+ * ({@code @Cacheable} / {@code @CacheEvict} / ...) works out of the box — no extra
+ * {@code @EnableCaching} needed on the application class.
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
@@ -55,6 +61,7 @@ import java.lang.annotation.Target;
 @Inherited
 @SpringBootConfiguration
 @EnableAutoConfiguration
+@EnableCaching
 @ComponentScan(
         basePackages = {
                 "**.controller.**",

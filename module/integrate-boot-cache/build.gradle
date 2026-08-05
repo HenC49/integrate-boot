@@ -1,0 +1,16 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    // Use the project BOM as the single source of dependency versions.
+    api platform(project(':bom'))
+
+    api(libs.spring.boot.starter.cache)
+    api(libs.caffeine)
+    api(libs.spring.boot.autoconfigure)
+
+    // Generates configuration property metadata so IDEs can auto-complete
+    // and document the properties consumed by this module.
+    annotationProcessor(libs.spring.boot.configuration.processor)
+}

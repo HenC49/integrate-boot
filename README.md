@@ -9,6 +9,7 @@ integrate-boot
 ├── bom                          # BOM (Bill of Materials) — dependency version management
 ├── module
 │   ├── integrate-boot-data      # Data-access integration (MyBatis-Flex + Spring Boot)
+│   ├── integrate-boot-cache     # Local cache integration (Caffeine + Spring Cache)
 │   └── integrate-boot-starter   # Bootstrap entry: @IntegrateBoot annotation + aggregated deps
 └── test
     └── integrate-boot-test      # Sample app exercising the modules end-to-end
@@ -130,14 +131,95 @@ If the switch is on but no `mybatis-flex.datasource.*` is configured, the app fa
 with a clear message. Leave the switch off (the default) for single-datasource apps — their
 behaviour is unchanged.
 
-## integrate-boot-starter
+## integrate-boot-cache
 
+Local cache module based on **Caffeine** + Spring's cache abstraction. It auto-configures two
+ready-to-use `CaffeineCacheManager` beans, so a service gets a sensible local cache without
+writing any wiring code:
+
+| Bean name              | Expiry                       | Notes                                         |
+|------------------------|------------------------------|-----------------------------------------------|
+| `cacheManagerPermanent`| none                         | Bounded only by `maximum-size`; reference data |
+| `cacheManagerExpiring` | `expire-after-write` (2m default), `@Primary` | The manager plain `@Cacheable` resolves to |
+
+### What you get out of the box
+
+- Two Caffeine-backed `CacheManager` beans, addressable by name
+- A `@Primary` manager with a bounded TTL, so declarative caching is safe by default
+- Tunable specs for each manager under `integrate-boot.cache.*`
+- Null-value caching enabled by default (helps prevent cache penetration)
+
+### Usage
+
+1. Depend on the module (or just use the starter, which aggregates it):
+
+   ```groovy
+   dependencies {
+       implementation platform('com.github.henc:integrate-boot-bom:0.0.1-SNAPSHOT')
+       implementation 'com.github.henc:integrate-boot-cache'
+   }
+   ```
+
+2. Use `@Cacheable` / `@CacheEvict` directly — `@IntegrateBoot` is already meta-annotated
+   with `@EnableCaching`, so declarative caching is on by default:
+
+   ```java
+   @IntegrateBoot
+   public class MyApplication { ... }
+
+   @Service
+   public class UserService {
+       // resolves to the @Primary "cacheManagerExpiring"
+       @Cacheable("users")
+       public User findById(Long id) { ... }
+
+       // pin to the permanent manager for reference data
+       @Cacheable(cacheManager = "cacheManagerPermanent", value = "dictionaries")
+       public Dictionary loadDict(String code) { ... }
+   }
+   ```
+
+3. Or use a manager programmatically:
+
+   ```java
+   @Autowired
+   @Qualifier("cacheManagerPermanent")
+   private CacheManager cacheManager;
+
+   cacheManager.getCache("dictionaries").put(code, dict);
+   ```
+
+### Configuration
+
+Both managers are tuned under `integrate-boot.cache.*`. Defaults are shown below; only override
+what you need:
+
+```yaml
+integrate-boot:
+  cache:
+    cache-null-values: true
+    permanent:                    # never expires by time
+      initial-capacity: 0
+      maximum-size: 10000
+    expiring:                     # @Primary, default 2-minute TTL
+      initial-capacity: 0
+      maximum-size: 10000
+      expire-after-write: 2m      # set expire-after-access instead/in addition as needed
+```
+
+`expire-after-access` / `expire-after-write` are optional durations; leaving them unset means
+"no expiry" for that policy, which is why `permanent` ships without any.
+
+Either manager can be replaced by defining your own bean under the same name — the defaults are
+guarded by `@ConditionalOnMissingBean`.
+
+## integrate-boot-starter
 Bootstrap entry point that aggregates the data layer and exposes the
 `@IntegrateBoot` convenience annotation.
 
 Depending on `integrate-boot-starter` transitively brings in `integrate-boot-data`
-(MyBatis-Flex + datasource auto-configuration), so a service only needs one dependency
-to get the whole stack.
+(MyBatis-Flex + datasource auto-configuration) and `integrate-boot-cache` (Caffeine + the
+local cache managers), so a service only needs one dependency to get the whole stack.
 
 ### Bean location conventions
 
