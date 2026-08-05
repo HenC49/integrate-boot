@@ -1,0 +1,19 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    // Use the project BOM as the single source of dependency versions.
+    api platform(project(':bom'))
+
+    api(libs.spring.boot.autoconfigure)
+    // Spring Security core (AuthenticationManager, UserDetailsService, PasswordEncoder, ...).
+    api(libs.spring.boot.starter.security)
+    // Spring Authorization Server (bundled into Spring Security 7.1) as an OAuth2 authorization
+    // server. Brings in the resource-server + JOSE + Nimbus JWT support transitively.
+    api(libs.spring.boot.starter.security.oauth2.authorization.server)
+
+    // Generates configuration property metadata so IDEs can auto-complete
+    // and document the properties consumed by this module.
+    annotationProcessor(libs.spring.boot.configuration.processor)
+}

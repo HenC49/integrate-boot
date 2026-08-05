@@ -23,6 +23,8 @@ dependencies {
         api(libs.spring.boot.configuration.processor)
         api(libs.spring.boot.starter.cache)
         api(libs.spring.boot.starter.json)
+        api(libs.spring.boot.starter.security)
+        api(libs.spring.boot.starter.security.oauth2.authorization.server)
 
         // MyBatis-Flex
         api(libs.mybatis.flex.spring.boot4.starter)

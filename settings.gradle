@@ -5,11 +5,13 @@ include('module:integrate-boot-data')
 include('module:integrate-boot-jackson')
 include('module:integrate-boot-cache')
 include('module:integrate-boot-redis')
+include('module:integrate-boot-authentication')
 include('module:integrate-boot-starter')
 include('test:integrate-boot-test')
 
 dependencyResolutionManagement {
     repositories {
         mavenCentral()
+        maven { url 'https://maven.aliyun.com/repository/public' }
     }
 }

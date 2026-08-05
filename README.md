@@ -12,6 +12,7 @@ integrate-boot
 │   ├── integrate-boot-jackson   # Jackson serialization defaults (date format + typed mapper)
 │   ├── integrate-boot-cache     # Local cache integration (Caffeine + Spring Cache)
 │   ├── integrate-boot-redis     # Redis integration (Redisson + Spring Data Redis)
+│   ├── integrate-boot-authentication # OAuth2 authorization server + password grant (optional)
 │   └── integrate-boot-starter   # Bootstrap entry: @IntegrateBoot annotation + aggregated deps
 └── test
     └── integrate-boot-test      # Sample app exercising the modules end-to-end
@@ -345,6 +346,99 @@ private RedissonClient sessionRedisson;
 A `multi` entry supports standalone (default), sentinel (`sentinel.master` + `sentinel.nodes`)
 and cluster (`cluster.nodes`) topologies, plus `username`, `password`, `database`, `timeout`
 and `ssl`. An empty / absent `multi` map (the default) means single-Redis mode.
+
+## integrate-boot-authentication
+
+OAuth2 authorization server + JWT resource protection, built on the Spring Boot 4.1
+`spring-boot-starter-security-oauth2-authorization-server` (Spring Security 7.1). It is an
+**optional** module — add it explicitly only to services that need authentication; the starter
+does not aggregate it, so services without auth keep running unconstrained.
+
+### What you get out of the box — zero config
+
+- A full OAuth2 authorization server issuing **JWT** access tokens (RSA key pair generated at
+  startup) and opaque refresh tokens, at the standard endpoints (`/oauth2/token`,
+  `/oauth2/authorize`, `/oauth2/jwks`, ...)
+- Standard grants: `authorization_code`, `client_credentials`, `refresh_token`
+- A custom **`password` grant** (`grant_type=password`, username/password → token), re-added as a
+  custom grant since OAuth 2.1 / Spring Authorization Server dropped it
+- A demo client (`client` / `secret`) and a demo user (`user` / `password`) so the server is
+  usable before any configuration — override them with your own beans
+- JWT-based resource protection for the application's own endpoints (Bearer token in
+  `Authorization` header), with the OAuth2 / actuator paths permitted
+
+### Usage
+
+1. Depend on the module (it is not aggregated by the starter):
+
+   ```groovy
+   dependencies {
+       implementation platform('com.github.henc:integrate-boot-bom:0.0.1-SNAPSHOT')
+       implementation 'com.github.henc:integrate-boot-authentication'
+   }
+   ```
+
+2. With the defaults, get a token via the password grant:
+
+   ```bash
+   curl -u client:secret -d "grant_type=password&username=user&password=password&scope=read" \
+       http://localhost:8080/oauth2/token
+   # -> {"access_token":"<JWT>","refresh_token":"...","token_type":"Bearer","expires_in":3600}
+   ```
+
+3. Call a protected endpoint with the token:
+
+   ```bash
+   curl -H "Authorization: Bearer <JWT>" http://localhost:8080/api/users
+   ```
+
+4. Plug in your own user store by implementing `UserDetailsPasswordService`:
+
+   ```java
+   @Component
+   public class DbUserDetailsService implements UserDetailsPasswordService {
+       @Override
+       public UserDetails loadUserByUsername(String username) {
+           // query your user table and return a UserDetails with the password hash + authorities
+       }
+   }
+   ```
+
+   When this bean is present, the module's demo user backs off (`@ConditionalOnMissingBean`).
+
+### Configure clients and issuer
+
+OAuth2 clients, the issuer and JWK are configured through Spring Boot's native properties — the
+module's own properties only toggle the password grant and add public paths:
+
+```yaml
+spring:
+  security:
+    oauth2:
+      authorization-server:
+        client:
+          my-client:
+            registration:
+              client-id: my-client
+              client-secret: "{bcrypt}$2a$10$..."   # hashed
+              client-authentication-methods: [client_secret_basic, client_secret_post]
+              authorization-grant-types: [password, refresh_token, client_credentials]
+              redirect-uris: ["http://127.0.0.1:8080/login/oauth2/code/my-client"]
+              scopes: [read, write]
+
+integrate-boot:
+  auth:
+    password-grant-enabled: true          # default true
+    permit-all-paths:                      # extra public paths, on top of /oauth2/**, /login, ...
+      - /public/**
+```
+
+Define your own `JWKSource<SecurityContext>` bean to load a fixed RSA key pair (instead of the
+auto-generated one) for production.
+
+> Note: the `password` grant carries the user's credentials to the token endpoint, so prefer
+> `authorization_code` + PKCE for human-facing clients. The password grant is provided mainly for
+> machine-to-machine and legacy-client compatibility.
 
 ## integrate-boot-starter
 Bootstrap entry point that aggregates the data layer and exposes the

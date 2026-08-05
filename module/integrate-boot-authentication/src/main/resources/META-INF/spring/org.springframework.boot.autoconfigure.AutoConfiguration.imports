@@ -1,0 +1,2 @@
+com.github.henc.integrateboot.auth.config.AuthorizationServerConfig
+com.github.henc.integrateboot.auth.config.JwkSourceConfig
