@@ -1,10 +1,17 @@
 plugins {
     id 'java-platform'
+    id 'maven-publish'
 }
 
 // Allow importing other BOMs (e.g. spring-boot-dependencies) into this platform.
 javaPlatform {
     allowDependencies()
+}
+
+// Publish under a conventional BOM artifactId. The Gradle project is named "bom", but Maven
+// consumers import it as com.github.henc:integrate-boot-bom.
+ext {
+    mavenArtifactId = 'integrate-boot-bom'
 }
 
 dependencies {
@@ -21,21 +28,39 @@ dependencies {
         api(libs.spring.boot.starter.test)
         api(libs.spring.boot.autoconfigure)
         api(libs.spring.boot.configuration.processor)
-        api(libs.spring.boot.starter.cache)
-        api(libs.spring.boot.starter.json)
-        api(libs.spring.boot.starter.security)
-        api(libs.spring.boot.starter.security.oauth2.authorization.server)
 
         // MyBatis-Flex
         api(libs.mybatis.flex.spring.boot4.starter)
 
-        // Caching
-        api(libs.caffeine)
-
         // Redis
         api(libs.redisson.spring.boot.starter)
+    }
+}
 
-        // Test
-        api(libs.h2)
+publishing {
+    publications {
+        // The java-platform plugin contributes a BOM-specific publication: the generated POM
+        // uses <dependencyManagement> (from the api/constraints above) rather than <dependencies>,
+        // which is the format Maven expects for an importable BOM.
+        register('integrateBootBom', MavenPublication).configure {
+            from components.javaPlatform
+            artifactId = mavenArtifactId
+
+            // A BOM carries no sources; keep the POM self-describing.
+            pom {
+                name = 'integrate-boot-bom'
+                description = 'Bill of Materials for integrate-boot — dependency version management'
+                packaging = 'pom'
+            }
+        }
+    }
+    repositories {
+        // Local staging directory shared with the library modules (root build/repo), so the
+        // whole project publishes into one tree. Run e.g.
+        // ./gradlew :bom:publishIntegrateBootBomPublicationToLocalStageRepository
+        maven {
+            name = 'localStage'
+            url = rootProject.layout.buildDirectory.dir('repo')
+        }
     }
 }

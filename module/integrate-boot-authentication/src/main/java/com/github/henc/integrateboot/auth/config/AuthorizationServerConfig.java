@@ -68,7 +68,7 @@ public class AuthorizationServerConfig {
     /**
      * Protocol-endpoint filter chain: applies the authorization-server defaults (token,
      * authorization, jwk-set, ... endpoints) and registers the custom password grant. Runs at a
-     * higher priority than {@link ResourceServerConfig}'s resource-protection chain.
+     * higher priority than the application's resource-protection filter chain.
      */
     @Bean
     @Order(1)

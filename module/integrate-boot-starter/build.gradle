@@ -2,6 +2,9 @@ plugins {
     id 'java-library'
 }
 
+// Publish this module's jar + POM (see gradle/publishing.gradle).
+apply from: "$rootDir/gradle/publishing.gradle"
+
 dependencies {
     // Use the project BOM as the single source of dependency versions.
     api platform(project(':bom'))

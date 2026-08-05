@@ -32,5 +32,8 @@ build/
 .idea/
 out/
 
+# macOS Finder metadata
+.DS_Store
+
 # ZCode
 .zcode/

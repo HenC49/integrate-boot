@@ -1,0 +1,47 @@
+// Shared Maven-publishing convention for integrate-boot library modules.
+//
+// Applied from each module's build.gradle via:
+//   apply from: "$rootDir/gradle/publishing.gradle"
+//
+// Publishes the `java` component under the project's name (e.g. integrate-boot-data) so the
+// artifact id matches the conventional com.github.henc:<module-name> coordinate. The local
+// staging repository mirrors the bom, so the whole project publishes into one tree.
+
+apply plugin: 'maven-publish'
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
+publishing {
+    publications {
+        // A stable publication name gives each library a predictable publish task while the
+        // Maven artifactId continues to default to its Gradle project name.
+        register('mavenJava', MavenPublication).configure {
+            from components.java
+            // POM metadata so the artifact is self-describing in a repository browser.
+            pom {
+                name = project.name
+                description = "integrate-boot module: ${project.name}"
+            }
+            versionMapping {
+                usage('java-api') {
+                    fromResolutionOf('runtimeClasspath')
+                }
+                usage('java-runtime') {
+                    fromResolutionResult()
+                }
+            }
+        }
+    }
+    repositories {
+        // Local staging directory shared with the bom. Run e.g.
+        // ./gradlew :module:integrate-boot-data:publishMavenJavaPublicationToLocalStageRepository
+        // to materialise the jar + POM here, ready to copy into any Maven repository.
+        maven {
+            name = 'localStage'
+            url = rootProject.layout.buildDirectory.dir('repo')
+        }
+    }
+}

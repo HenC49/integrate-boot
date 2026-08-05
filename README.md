@@ -30,6 +30,63 @@ This project uses Gradle (Groovy DSL). Use the included wrapper — no local Gra
 ./gradlew build
 ```
 
+## Publishing
+
+Every library module is published with the same Maven repository layout used by Spring Boot:
+`jar`, `pom`, Gradle module metadata, `-sources.jar`, and `-javadoc.jar`. The BOM is a POM-only
+artifact. Maven consumers resolve the POM as a separate repository artifact; POM files are neither
+committed at module roots nor embedded in library JARs.
+
+Publish **everything** (BOM + all modules) into one local staging tree:
+
+```bash
+./gradlew publishAllPublicationsToLocalStageRepository
+# -> build/repo/com/github/henc/integrate-boot-*/<version>/...
+```
+
+Or publish a single module, e.g.:
+
+```bash
+./gradlew :module:integrate-boot-data:publishMavenJavaPublicationToLocalStageRepository
+./gradlew :bom:publishIntegrateBootBomPublicationToLocalStageRepository
+```
+
+(To publish to a remote repository such as Nexus or Artifactory, add a `maven { url = '...' }`
+entry under `publishing.repositories` — in `bom/build.gradle` for the BOM, or in
+`gradle/publishing.gradle` for the library modules.)
+
+### The BOM — import once, get all versions
+
+The `bom` module is a plain POM with a `<dependencyManagement>` section (no binary artifact).
+Import it to inherit the whole dependency-version set with one line.
+
+```xml
+<!-- Maven -->
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>com.github.henc</groupId>
+            <artifactId>integrate-boot-bom</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+
+```groovy
+// Gradle (Groovy DSL)
+dependencies {
+    implementation platform('com.github.henc:integrate-boot-bom:0.0.1-SNAPSHOT')
+    // then depend on modules without versions, e.g.:
+    implementation 'com.github.henc:integrate-boot-starter'
+}
+```
+
+Each library module's POM re-imports the BOM under its own `<dependencyManagement>`, so even a
+consumer that depends on a single module gets consistent transitive versions.
+
 ## Requirements
 
 - JDK 21

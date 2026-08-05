@@ -2,6 +2,7 @@
 // The root project is an aggregator only; it does not apply any JVM plugin.
 
 subprojects {
+    // Apply the Java 21 toolchain to every JVM subproject.
     plugins.withType(JavaPlugin).tap {
         configureEach {
             java {
