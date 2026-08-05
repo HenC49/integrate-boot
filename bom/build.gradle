@@ -22,12 +22,16 @@ dependencies {
         api(libs.spring.boot.autoconfigure)
         api(libs.spring.boot.configuration.processor)
         api(libs.spring.boot.starter.cache)
+        api(libs.spring.boot.starter.json)
 
         // MyBatis-Flex
         api(libs.mybatis.flex.spring.boot4.starter)
 
         // Caching
         api(libs.caffeine)
+
+        // Redis
+        api(libs.redisson.spring.boot.starter)
 
         // Test
         api(libs.h2)

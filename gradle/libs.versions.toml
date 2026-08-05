@@ -1,6 +1,7 @@
 [versions]
 spring-boot = "4.1.0"
 mybatis-flex = "1.11.8"
+redisson = "4.1.0"
 junit-platform = "6.0.3"
 
 [libraries]
@@ -13,12 +14,16 @@ spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-star
 spring-boot-autoconfigure = { module = "org.springframework.boot:spring-boot-autoconfigure", version.ref = "spring-boot" }
 spring-boot-configuration-processor = { module = "org.springframework.boot:spring-boot-configuration-processor", version.ref = "spring-boot" }
 spring-boot-starter-cache = { module = "org.springframework.boot:spring-boot-starter-cache" }
+spring-boot-starter-json = { module = "org.springframework.boot:spring-boot-starter-json" }
 
 # MyBatis-Flex
 mybatis-flex-spring-boot4-starter = { module = "com.mybatis-flex:mybatis-flex-spring-boot4-starter", version.ref = "mybatis-flex" }
 
 # Caching
 caffeine = { module = "com.github.ben-manes.caffeine:caffeine" }
+
+# Redis
+redisson-spring-boot-starter = { module = "org.redisson:redisson-spring-boot-starter", version.ref = "redisson" }
 
 # Test
 h2 = { module = "com.h2database:h2" }

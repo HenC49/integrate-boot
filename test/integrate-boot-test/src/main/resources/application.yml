@@ -7,6 +7,14 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+  # Redis connection. The password is supplied at runtime (e.g. via the REDIS_PASSWORD
+  # environment variable) so no secret is committed to the repository.
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
   sql:
     init:
       mode: always

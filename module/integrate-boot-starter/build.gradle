@@ -14,5 +14,9 @@ dependencies {
     // brings in Caffeine + the two cache managers.
     api project(':module:integrate-boot-cache')
 
+    // Aggregate the Redis layer: depending on the starter transitively
+    // brings in Redisson + RedisTemplate (both sharing the same Redis client).
+    api project(':module:integrate-boot-redis')
+
     api(libs.spring.boot.starter)
 }

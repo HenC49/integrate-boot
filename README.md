@@ -10,6 +10,7 @@ integrate-boot
 ├── module
 │   ├── integrate-boot-data      # Data-access integration (MyBatis-Flex + Spring Boot)
 │   ├── integrate-boot-cache     # Local cache integration (Caffeine + Spring Cache)
+│   ├── integrate-boot-redis     # Redis integration (Redisson + Spring Data Redis)
 │   └── integrate-boot-starter   # Bootstrap entry: @IntegrateBoot annotation + aggregated deps
 └── test
     └── integrate-boot-test      # Sample app exercising the modules end-to-end
@@ -213,13 +214,107 @@ integrate-boot:
 Either manager can be replaced by defining your own bean under the same name — the defaults are
 guarded by `@ConditionalOnMissingBean`.
 
+## integrate-boot-redis
+
+Redis module built on **Redisson** + Spring Data Redis. It leans on the Redisson Spring Boot
+starter, which auto-configures a `RedissonClient` and uses Redisson as the underlying
+`RedisConnectionFactory` from Spring Boot's native `spring.data.redis.*` properties. Because
+both `RedisTemplate` and `RedissonClient` are backed by that single connection factory, they
+share the same Redis client and configuration — nothing extra is needed to keep them in sync.
+
+### What you get out of the box
+
+- A `RedissonClient` auto-configured from `spring.data.redis.*`
+- A `@Primary RedisTemplate` / `StringRedisTemplate` with String keys + JSON values (Jackson 3,
+  with type information so cached objects restore their concrete types)
+- Optional extra Redis instances under `integrate-boot.redis.multi.*`, each exposing its own
+  `RedissonClient` / `RedisTemplate` / `StringRedisTemplate` beans (inject by name)
+- Distributed-lock / collection APIs directly from `RedissonClient` (`RLock`, `RMap`, `RBucket`, ...)
+
+### Usage
+
+1. Depend on the module (or just use the starter, which aggregates it):
+
+   ```groovy
+   dependencies {
+       implementation platform('com.github.henc:integrate-boot-bom:0.0.1-SNAPSHOT')
+       implementation 'com.github.henc:integrate-boot-redis'
+   }
+   ```
+
+2. Configure the default Redis connection with the standard Spring Boot properties. Secrets
+   such as the password are best supplied via environment variables rather than committed to
+   source:
+
+   ```yaml
+   spring:
+     data:
+       redis:
+         host: ${REDIS_HOST:localhost}
+         port: ${REDIS_PORT:6379}
+         password: ${REDIS_PASSWORD:}        # pass via REDIS_PASSWORD env var
+         database: ${REDIS_DATABASE:0}
+   ```
+
+3. Use `RedisTemplate` or `RedissonClient` directly — both connect to the same Redis:
+
+   ```java
+   @Autowired
+   private RedisTemplate<Object, Object> redisTemplate;   // JSON-serialized values
+
+   @Autowired
+   private RedissonClient redissonClient;                 // RLock, RMap, RBucket ...
+
+   RLock lock = redissonClient.getLock("order:lock:123");
+   if (lock.tryLock(10, 60, TimeUnit.SECONDS)) {
+       try { ... } finally { lock.unlock(); }
+   }
+   ```
+
+### Multiple Redis instances
+
+Declare extra connections under `integrate-boot.redis.multi.<name>.*`; each yields three named
+beans (`redissonClient-<name>`, `redisTemplate-<name>`, `stringRedisTemplate-<name>`), injected
+via `@Qualifier`:
+
+```yaml
+integrate-boot:
+  redis:
+    multi:
+      user:                          # instance "user"
+        host: 10.0.0.1
+        port: 6379
+        password: pass-user
+        database: 1
+      session:                       # instance "session" (cluster)
+        cluster:
+          nodes:
+            - 10.0.0.2:7001
+            - 10.0.0.2:7002
+            - 10.0.0.2:7003
+        password: pass-session
+```
+
+```java
+@Resource(name = "redisTemplate-user")
+private RedisTemplate<Object, Object> userRedisTemplate;
+
+@Resource(name = "redissonClient-session")
+private RedissonClient sessionRedisson;
+```
+
+A `multi` entry supports standalone (default), sentinel (`sentinel.master` + `sentinel.nodes`)
+and cluster (`cluster.nodes`) topologies, plus `username`, `password`, `database`, `timeout`
+and `ssl`. An empty / absent `multi` map (the default) means single-Redis mode.
+
 ## integrate-boot-starter
 Bootstrap entry point that aggregates the data layer and exposes the
 `@IntegrateBoot` convenience annotation.
 
 Depending on `integrate-boot-starter` transitively brings in `integrate-boot-data`
-(MyBatis-Flex + datasource auto-configuration) and `integrate-boot-cache` (Caffeine + the
-local cache managers), so a service only needs one dependency to get the whole stack.
+(MyBatis-Flex + datasource auto-configuration), `integrate-boot-cache` (Caffeine + the local
+cache managers) and `integrate-boot-redis` (Redisson + RedisTemplate), so a service only needs
+one dependency to get the whole stack.
 
 ### Bean location conventions
 
@@ -287,8 +382,11 @@ Sample application that boots the whole stack with `@IntegrateBoot` over an in-m
 database (no external setup) and verifies the modules end-to-end: conventional layer
 scanning, MyBatis-Flex mapper access, transactions, and underscore-to-camelCase mapping.
 
-Run the integration tests:
+The Redis layer requires a running Redis instance. The connection is read from environment
+variables so no secret is stored in the repository — pass the password on the command line:
 
 ```bash
-./gradlew :test:integrate-boot-test:test
+REDIS_PASSWORD=<your-redis-password> ./gradlew :test:integrate-boot-test:test
 ```
+
+`REDIS_HOST`, `REDIS_PORT` and `REDIS_DATABASE` default to `localhost` / `6379` / `0`.
