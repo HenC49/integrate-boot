@@ -12,9 +12,9 @@ dependencies {
     // same spring.data.redis.* configuration.
     api(libs.redisson.spring.boot.starter)
     api(libs.spring.boot.autoconfigure)
-    // Jackson serializers used by the auto-configured RedisTemplate. Brings in jackson-databind
-    // plus the JSR310/JDK8 modules so cached date/time values round-trip correctly.
-    api(libs.spring.boot.starter.json)
+    // Reuses the typedObjectMapper (Jackson 3, with type info) for Redis value serialization,
+    // so cached values share one consistent, date-formatted ObjectMapper with the rest of the app.
+    api project(':module:integrate-boot-jackson')
 
     // Generates configuration property metadata so IDEs can auto-complete
     // and document the properties consumed by this module.

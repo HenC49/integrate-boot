@@ -10,6 +10,10 @@ dependencies {
     // brings in MyBatis-Flex + datasource auto-configuration.
     api project(':module:integrate-boot-data')
 
+    // Aggregate the Jackson layer: default date/time serialization format plus a
+    // typed ObjectMapper for caches / micro-service payloads.
+    api project(':module:integrate-boot-jackson')
+
     // Aggregate the local cache layer: depending on the starter transitively
     // brings in Caffeine + the two cache managers.
     api project(':module:integrate-boot-cache')

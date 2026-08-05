@@ -7,47 +7,42 @@ import org.springframework.data.redis.serializer.GenericJacksonJsonRedisSerializ
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
-import tools.jackson.databind.DefaultTyping;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 
 /**
  * Internal helper that applies the module's standard serializers to a {@link RedisTemplate}.
  *
- * <p>Centralizes the Jackson configuration (default typing for polymorphic deserialization) so
- * the default template and every extra multi-instance template serialize identically. Uses
- * Spring Data Redis' Jackson 3.x serializer ({@link GenericJacksonJsonRedisSerializer}), which
- * matches the Jackson version shipped with Spring Boot 4.1.
+ * <p>Uses the shared {@code typedObjectMapper} (Jackson 3, with type information) from the
+ * integrate-boot-jackson module, so cached values serialize the same way everywhere — including
+ * the configured date/time format. Keys and hash-keys use a {@link StringRedisSerializer}.
  */
 final class RedisSerializers {
 
     static final StringRedisSerializer STRING = StringRedisSerializer.UTF_8;
 
-    /** Lazily built once; safe to share across templates as serializers are stateless readers. */
-    private static final RedisSerializer<Object> JSON = buildJsonSerializer();
-
     private RedisSerializers() {
     }
 
     /**
-     * Apply String keys + JSON values/hash-values to the given template.
+     * Build a JSON value serializer backed by the given {@link ObjectMapper}.
      */
-    static void apply(RedisTemplate<?, ?> template) {
-        template.setKeySerializer(STRING);
-        template.setHashKeySerializer(STRING);
-        template.setValueSerializer(JSON);
-        template.setHashValueSerializer(JSON);
+    static RedisSerializer<Object> jsonSerializer(ObjectMapper objectMapper) {
+        return new GenericJacksonJsonRedisSerializer(objectMapper);
     }
 
     /**
-     * Build a {@link RedisTemplate} bound to {@code connectionFactory} with the standard
-     * serializers, ready for use.
+     * Build a {@link RedisTemplate} bound to {@code connectionFactory} with String keys and
+     * JSON values (using {@code objectMapper}), ready for use.
      */
-    static RedisTemplate<Object, Object> buildTemplate(RedisConnectionFactory connectionFactory) {
+    static RedisTemplate<Object, Object> buildTemplate(RedisConnectionFactory connectionFactory,
+                                                       ObjectMapper objectMapper) {
         RedisTemplate<Object, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
-        apply(template);
+        RedisSerializer<Object> json = jsonSerializer(objectMapper);
+        template.setKeySerializer(STRING);
+        template.setHashKeySerializer(STRING);
+        template.setValueSerializer(json);
+        template.setHashValueSerializer(json);
         template.afterPropertiesSet();
         return template;
     }
@@ -59,24 +54,5 @@ final class RedisSerializers {
         StringRedisTemplate template = new StringRedisTemplate(connectionFactory);
         template.afterPropertiesSet();
         return template;
-    }
-
-    /**
-     * JSON serializer that writes the concrete type as a {@code @class} property, allowing
-     * values to be deserialized back into their original types. {@code findAndAddModules}
-     * registers the JSR310 (java.time) and JDK8 support so cached date/time types round-trip.
-     */
-    private static RedisSerializer<Object> buildJsonSerializer() {
-        // Allow polymorphic deserialization for any non-final object type so cached values
-        // restore their original concrete classes (equivalent to the legacy laissez-faire
-        // validator, built from the public API since the built-in one is package-private).
-        BasicPolymorphicTypeValidator typeValidator = BasicPolymorphicTypeValidator.builder()
-                .allowIfBaseType(Object.class)
-                .build();
-        ObjectMapper mapper = JsonMapper.builder()
-                .findAndAddModules()
-                .activateDefaultTyping(typeValidator, DefaultTyping.NON_FINAL)
-                .build();
-        return new GenericJacksonJsonRedisSerializer(mapper);
     }
 }

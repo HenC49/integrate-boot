@@ -1,10 +1,12 @@
 package com.github.henc.integrateboot.redis.config;
 
+import com.github.henc.integrateboot.jackson.JacksonConst;
 import com.github.henc.integrateboot.redis.RedisConst;
 import org.redisson.Redisson;
 import org.redisson.api.RedissonClient;
 import org.redisson.spring.data.connection.RedissonConnectionFactory;
 import org.springframework.beans.factory.SmartInitializingSingleton;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -15,6 +17,8 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
+
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 
@@ -31,10 +35,10 @@ import java.util.Map;
  * <ol>
  *   <li><b>Default serializers.</b> Replaces the starter's bare {@link RedisTemplate} with one
  *       using {@link org.springframework.data.redis.serializer.StringRedisSerializer} for keys /
- *       hash-keys and {@link org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer}
- *       for values / hash-values, so cached objects are stored as readable JSON with type
- *       information. The {@code @ConditionalOnMissingBean} guards mean a user-defined template
- *       of the same name always wins.</li>
+ *       hash-keys and a JSON serializer (backed by the {@code typedObjectMapper}) for values /
+ *       hash-values, so cached objects are stored as readable JSON with type information and the
+ *       configured date/time format. The {@code @ConditionalOnMissingBean} guards mean a
+ *       user-defined template of the same name always wins.</li>
  *   <li><b>Extra instances.</b> For every entry under {@code integrate-boot.redis.multi.*},
  *       registers a dedicated {@code redissonClient-<name>}, {@code redisTemplate-<name>} and
  *       {@code stringRedisTemplate-<name>} as named singletons, injectable via
@@ -49,14 +53,16 @@ public class RedisAutoConfiguration {
     /**
      * Default {@link RedisTemplate} — {@code @Primary} so plain {@code @Autowired
      * RedisTemplate} resolves to it. Keys use a {@link org.springframework.data.redis.serializer.StringRedisSerializer};
-     * values use a {@link org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer}
-     * so objects are stored as JSON carrying their type.
+     * values are serialized through the shared {@code typedObjectMapper} (Jackson 3, with type
+     * information) so objects are stored as JSON carrying their concrete type.
      */
     @Bean(RedisConst.REDIS_TEMPLATE)
     @Primary
     @ConditionalOnMissingBean(name = RedisConst.REDIS_TEMPLATE)
-    public RedisTemplate<Object, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
-        return RedisSerializers.buildTemplate(connectionFactory);
+    public RedisTemplate<Object, Object> redisTemplate(RedisConnectionFactory connectionFactory,
+                                                       @Qualifier(JacksonConst.TYPED_OBJECT_MAPPER)
+                                                       ObjectMapper typedObjectMapper) {
+        return RedisSerializers.buildTemplate(connectionFactory, typedObjectMapper);
     }
 
     /**
@@ -76,8 +82,10 @@ public class RedisAutoConfiguration {
      */
     @Bean
     public MultiRedisRegistrar multiRedisRegistrar(RedisProperties properties,
-                                                   ConfigurableListableBeanFactory beanFactory) {
-        return new MultiRedisRegistrar(properties, beanFactory);
+                                                   ConfigurableListableBeanFactory beanFactory,
+                                                   @Qualifier(JacksonConst.TYPED_OBJECT_MAPPER)
+                                                   ObjectMapper typedObjectMapper) {
+        return new MultiRedisRegistrar(properties, beanFactory, typedObjectMapper);
     }
 
     /**
@@ -90,9 +98,13 @@ public class RedisAutoConfiguration {
 
         private final ConfigurableListableBeanFactory beanFactory;
 
-        MultiRedisRegistrar(RedisProperties properties, ConfigurableListableBeanFactory beanFactory) {
+        private final ObjectMapper typedObjectMapper;
+
+        MultiRedisRegistrar(RedisProperties properties, ConfigurableListableBeanFactory beanFactory,
+                            ObjectMapper typedObjectMapper) {
             this.properties = properties;
             this.beanFactory = beanFactory;
+            this.typedObjectMapper = typedObjectMapper;
         }
 
         @Override
@@ -113,7 +125,7 @@ public class RedisAutoConfiguration {
             beanFactory.registerSingleton(RedisConst.REDISSON_CLIENT_PREFIX + name, client);
             beanFactory.registerSingleton(
                     RedisConst.REDIS_TEMPLATE_PREFIX + name,
-                    RedisSerializers.buildTemplate(connectionFactory));
+                    RedisSerializers.buildTemplate(connectionFactory, typedObjectMapper));
             beanFactory.registerSingleton(
                     RedisConst.STRING_REDIS_TEMPLATE_PREFIX + name,
                     RedisSerializers.buildStringTemplate(connectionFactory));

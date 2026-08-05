@@ -1,0 +1,16 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    // Use the project BOM as the single source of dependency versions.
+    api platform(project(':bom'))
+
+    api(libs.spring.boot.autoconfigure)
+    // Jackson 3.x (tools.jackson.*) with the JSR-310 / JDK8 support bundled in databind.
+    api(libs.spring.boot.starter.json)
+
+    // Generates configuration property metadata so IDEs can auto-complete
+    // and document the properties consumed by this module.
+    annotationProcessor(libs.spring.boot.configuration.processor)
+}

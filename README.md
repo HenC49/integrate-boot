@@ -9,6 +9,7 @@ integrate-boot
 ├── bom                          # BOM (Bill of Materials) — dependency version management
 ├── module
 │   ├── integrate-boot-data      # Data-access integration (MyBatis-Flex + Spring Boot)
+│   ├── integrate-boot-jackson   # Jackson serialization defaults (date format + typed mapper)
 │   ├── integrate-boot-cache     # Local cache integration (Caffeine + Spring Cache)
 │   ├── integrate-boot-redis     # Redis integration (Redisson + Spring Data Redis)
 │   └── integrate-boot-starter   # Bootstrap entry: @IntegrateBoot annotation + aggregated deps
@@ -132,6 +133,43 @@ If the switch is on but no `mybatis-flex.datasource.*` is configured, the app fa
 with a clear message. Leave the switch off (the default) for single-datasource apps — their
 behaviour is unchanged.
 
+## integrate-boot-jackson
+
+Centralizes Jackson (3.x, `tools.jackson.*`) serialization defaults for the whole application.
+
+### What you get out of the box — zero config
+
+- **Web-global date/time format.** Both `java.util.Date` / `Calendar` and
+  `java.time.LocalDateTime` serialize as `yyyy-MM-dd HH:mm:ss` in `GMT+8`. This is applied via a
+  `JsonMapperBuilderCustomizer` on Spring Boot's auto-configured `ObjectMapper`, so it affects
+  REST responses with no YAML needed.
+- **`typedObjectMapper` bean.** A standalone `ObjectMapper` (named `typedObjectMapper`) that
+  additionally writes the concrete type as a `@class` property (default typing). It is **not**
+  `@Primary`, so web responses stay clean of type noise; inject it by name where type-preserving
+  serialization is required (Redis values, micro-service RPC).
+
+### Usage
+
+Nothing is required to enable the defaults. Override the format/timezone if needed:
+
+```yaml
+integrate-boot:
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss   # optional, this is the default
+    time-zone: GMT+8                    # optional, this is the default
+```
+
+Use the typed mapper where values must round-trip into their original types:
+
+```java
+@Autowired
+@Qualifier("typedObjectMapper")
+private ObjectMapper typedObjectMapper;
+```
+
+The Redis module already wires its `RedisTemplate` to this mapper, so cached objects (including
+date/time fields) serialize consistently with the rest of the app.
+
 ## integrate-boot-cache
 
 Local cache module based on **Caffeine** + Spring's cache abstraction. It auto-configures two
@@ -225,8 +263,9 @@ share the same Redis client and configuration — nothing extra is needed to kee
 ### What you get out of the box
 
 - A `RedissonClient` auto-configured from `spring.data.redis.*`
-- A `@Primary RedisTemplate` / `StringRedisTemplate` with String keys + JSON values (Jackson 3,
-  with type information so cached objects restore their concrete types)
+- A `@Primary RedisTemplate` / `StringRedisTemplate` with String keys + JSON values. Values go
+  through the shared `typedObjectMapper` (Jackson 3, with type information and the configured
+  date/time format), so cached objects restore their concrete types
 - Optional extra Redis instances under `integrate-boot.redis.multi.*`, each exposing its own
   `RedissonClient` / `RedisTemplate` / `StringRedisTemplate` beans (inject by name)
 - Distributed-lock / collection APIs directly from `RedissonClient` (`RLock`, `RMap`, `RBucket`, ...)
@@ -312,9 +351,10 @@ Bootstrap entry point that aggregates the data layer and exposes the
 `@IntegrateBoot` convenience annotation.
 
 Depending on `integrate-boot-starter` transitively brings in `integrate-boot-data`
-(MyBatis-Flex + datasource auto-configuration), `integrate-boot-cache` (Caffeine + the local
-cache managers) and `integrate-boot-redis` (Redisson + RedisTemplate), so a service only needs
-one dependency to get the whole stack.
+(MyBatis-Flex + datasource auto-configuration), `integrate-boot-jackson` (date/time defaults +
+the typed `ObjectMapper`), `integrate-boot-cache` (Caffeine + the local cache managers) and
+`integrate-boot-redis` (Redisson + RedisTemplate), so a service only needs one dependency to
+get the whole stack.
 
 ### Bean location conventions
 
