@@ -1,0 +1,18 @@
+plugins {
+    id 'java-library'
+}
+
+// Publish this module's jar + POM (see gradle/publishing.gradle).
+apply from: "$rootDir/gradle/publishing.gradle"
+
+dependencies {
+    // Intentionally no compile dependencies: the base module carries only plain-Java
+    // entities (ResultInfo / KeyValue) and must stay usable from any layer — including
+    // non-Spring ones — without dragging a framework along.
+    //
+    // Tests run on JUnit Jupiter + AssertJ; versions come from the project BOM. The
+    // platform is test-scoped, so it never appears in the published POM.
+    testImplementation platform(project(':bom'))
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.assertj:assertj-core'
+}

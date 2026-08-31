@@ -8,6 +8,7 @@ A foundational framework for business systems, encapsulating core capabilities.
 integrate-boot
 ├── bom                          # BOM (Bill of Materials) — dependency version management
 ├── module
+│   ├── integrate-boot-base      # Base entities (ResultInfo / KeyValue) — plain Java, no deps
 │   ├── integrate-boot-data      # Data-access integration (MyBatis-Flex + Spring Boot)
 │   ├── integrate-boot-jackson   # Jackson serialization defaults (date format + typed mapper)
 │   ├── integrate-boot-logging   # Service logging: SLF4J facade over Log4j2 + default config
@@ -93,6 +94,35 @@ consumer that depends on a single module gets consistent transitive versions.
 
 - JDK 21
 - Gradle 8.14+ (provided via the wrapper)
+
+## integrate-boot-base
+
+Shared base entities, in plain Java with **no framework dependencies**, so any layer (including
+non-Spring code) may use them. The starter aggregates it.
+
+- **`ResultInfo`** — the standard response envelope: `success` / `code` / `message` / `requestId`
+  plus an open `result` map. Created through the static factories, filled fluently:
+
+  ```java
+  // {"success":true,"code":0,"result":{"user":...,"roles":...}}
+  return ResultInfo.success().put("user", user).put("roles", roles);
+
+  // {"success":false,"code":-1,"message":"user not found"}
+  return ResultInfo.failure("user not found");
+  return ResultInfo.failure(40401, "user not found");   // explicit error code
+  ```
+
+  Success carries code `0` (`CODE_SUCCESS`); `failure(message)` defaults to code `-1`
+  (`CODE_FAILURE`) — any non-zero code means failure, and services may define their own ranges.
+  Fields are `protected`, so a service can extend the class with its own typed result shape
+  while keeping the wire contract.
+
+- **`KeyValue<K, V>`** — a minimal generic key-value pair (public mutable `key` / `value`
+  fields plus bean getters/setters) for places a `Map` entry does not fit:
+
+  ```java
+  List<KeyValue<String, Integer>> counts = List.of(KeyValue.of("alice", 3), KeyValue.of("bob", 5));
+  ```
 
 ## integrate-boot-data
 
@@ -665,7 +695,8 @@ per application (Spring Security 7 rejects two matches-any-request chains at sta
 
 `@IntegrateBoot` convenience annotation.
 
-Depending on `integrate-boot-starter` transitively brings in `integrate-boot-data`
+Depending on `integrate-boot-starter` transitively brings in `integrate-boot-base`
+(the `ResultInfo` / `KeyValue` base entities), `integrate-boot-data`
 (MyBatis-Flex + datasource auto-configuration), `integrate-boot-jackson` (date/time defaults +
 the typed `ObjectMapper`), `integrate-boot-cache` (Caffeine + the local cache managers),
 `integrate-boot-redis` (Redisson + RedisTemplate) and `integrate-boot-logging` (SLF4J facade

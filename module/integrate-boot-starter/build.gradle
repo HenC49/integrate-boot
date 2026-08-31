@@ -9,6 +9,10 @@ dependencies {
     // Use the project BOM as the single source of dependency versions.
     api platform(project(':bom'))
 
+    // Aggregate the base layer: shared plain-Java entities (ResultInfo / KeyValue)
+    // usable from any layer without pulling in a framework.
+    api project(':module:integrate-boot-base')
+
     // Aggregate the data-access layer: depending on the starter transitively
     // brings in MyBatis-Flex + datasource auto-configuration.
     api project(':module:integrate-boot-data')
