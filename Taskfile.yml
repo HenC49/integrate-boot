@@ -29,6 +29,11 @@ tasks:
     cmds:
       - ./gradlew test
 
+  e2e:
+    desc: Run live HTTP end-to-end tests for the sample application
+    cmds:
+      - ./gradlew :test:integrate-boot-test:e2eTest
+
   ci:
     desc: CI pipeline — clean build, no daemon, full stack traces
     cmds:

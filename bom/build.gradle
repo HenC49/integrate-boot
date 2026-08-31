@@ -30,6 +30,7 @@ dependencies {
         api(libs.spring.boot.autoconfigure)
         api(libs.spring.boot.configuration.processor)
         api(libs.spring.boot.starter.log4j2)
+        api(libs.spring.boot.resttestclient)
         api(libs.slf4j.api)
 
         // MyBatis-Flex

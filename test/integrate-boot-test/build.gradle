@@ -5,6 +5,22 @@ plugins {
 // The JUnit Platform test setup (useJUnitPlatform + launcher alignment) is
 // configured once for all subprojects in the root build.gradle.
 
+// Keep end-to-end tests in a separate source set so the regular unit/in-process integration
+// suite remains fast and does not require a running Redis instance merely for `test`/`build`.
+sourceSets {
+    e2e {
+        java.srcDir 'src/e2e/java'
+        resources.srcDir 'src/e2e/resources'
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+configurations {
+    e2eImplementation.extendsFrom implementation, testImplementation
+    e2eRuntimeOnly.extendsFrom runtimeOnly, testRuntimeOnly
+}
+
 dependencies {
     // Use the project BOM as the single source of dependency versions.
     implementation platform(project(':bom'))
@@ -27,4 +43,17 @@ dependencies {
     // Spring Boot 4 split MockMvc auto-configuration (@AutoConfigureMockMvc) out of
     // spring-boot-starter-test into a per-technology test module.
     testImplementation(libs.spring.boot.starter.webmvc.test)
+
+    // Spring Boot 4.1's live HTTP test client is a separate module. It provides both
+    // RestTestClient and @AutoConfigureRestTestClient for random-port end-to-end tests.
+    e2eImplementation(libs.spring.boot.resttestclient)
+}
+
+tasks.register('e2eTest', Test) {
+    description = 'Runs live HTTP end-to-end tests against the sample application.'
+    group = 'verification'
+    testClassesDirs = sourceSets.e2e.output.classesDirs
+    classpath = sourceSets.e2e.runtimeClasspath
+    shouldRunAfter test
+    useJUnitPlatform()
 }
