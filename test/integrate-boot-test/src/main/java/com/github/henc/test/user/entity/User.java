@@ -1,5 +1,6 @@
 package com.github.henc.test.user.entity;
 
+import com.mybatisflex.annotation.Column;
 import com.mybatisflex.annotation.Id;
 import com.mybatisflex.annotation.KeyType;
 import com.mybatisflex.annotation.Table;
@@ -13,8 +14,11 @@ import com.mybatisflex.annotation.Table;
 public class User {
 
     @Id(keyType = KeyType.Auto)
+    @Column("id")
     private Long id;
+    @Column("user_name")
     private String userName;
+    @Column("age")
     private Integer age;
 
     public User() {
