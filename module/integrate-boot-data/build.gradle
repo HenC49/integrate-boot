@@ -9,6 +9,10 @@ dependencies {
     // Use the project BOM as the single source of dependency versions.
     api platform(project(':bom'))
 
+    // Base carries the DateUtils time-source SPI (plain Java, no dependencies), which
+    // this module's DbDateTimeService implements.
+    api project(':module:integrate-boot-base')
+
     // Exclusions keep Boot's default Logback starter out of the published POM: the platform
     // logs via SLF4J + Log4j2 (see integrate-boot-logging).
     api(libs.mybatis.flex.spring.boot4.starter) {
@@ -25,4 +29,7 @@ dependencies {
     // Generates configuration property metadata so IDEs can auto-complete
     // and document the properties consumed by this module.
     annotationProcessor(libs.spring.boot.configuration.processor)
+
+    testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.h2)
 }

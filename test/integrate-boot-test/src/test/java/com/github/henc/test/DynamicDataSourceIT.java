@@ -21,6 +21,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Verifies dynamic datasource support: with {@code integrate-boot.data.datasource.dynamic.enabled=true}
  * and two datasources declared under {@code mybatis-flex.datasource}, queries are routed to
  * the right database via {@link DataSourceKey}.
+ *
+ * <p><b>Test-ordering caveat.</b> The {@link Db}/{@link Row} APIs resolve their session
+ * factory from MyBatis-Flex's JVM-global {@code FlexGlobalConfig}, keyed by datasource
+ * name — and single-datasource apps also name their datasource {@code "master"}. The
+ * first application context started in the test JVM therefore claims the
+ * {@code "master"} slot. This class must run before any default-profile test class so
+ * its dynamic context wins; JUnit's deterministic class-name order guarantees that as
+ * long as every default-profile test class is named after {@code DynamicDataSourceIT}
+ * (e.g. {@code TimeSourcesIT}, not {@code DateTimeIT}).
  */
 @SpringBootTest
 @ActiveProfiles("dynamic")

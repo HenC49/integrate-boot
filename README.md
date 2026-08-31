@@ -8,7 +8,7 @@ A foundational framework for business systems, encapsulating core capabilities.
 integrate-boot
 ├── bom                          # BOM (Bill of Materials) — dependency version management
 ├── module
-│   ├── integrate-boot-base      # Base entities (ResultInfo / KeyValue) — plain Java, no deps
+│   ├── integrate-boot-base      # Base entities + date/time utils (DateUtils) — plain Java, no deps
 │   ├── integrate-boot-data      # Data-access integration (MyBatis-Flex + Spring Boot)
 │   ├── integrate-boot-jackson   # Jackson serialization defaults (date format + typed mapper)
 │   ├── integrate-boot-logging   # Service logging: SLF4J facade over Log4j2 + default config
@@ -112,8 +112,8 @@ consumer that depends on a single module gets consistent transitive versions.
 
 ## integrate-boot-base
 
-Shared base entities, in plain Java with **no framework dependencies**, so any layer (including
-non-Spring code) may use them. The starter aggregates it.
+Shared base entities and utilities, in plain Java with **no framework dependencies**, so any
+layer (including non-Spring code) may use them. The starter aggregates it.
 
 - **`ResultInfo`** — the standard response envelope: `success` / `code` / `message` / `requestId`
   plus an open `result` map. Created through the static factories, filled fluently:
@@ -139,6 +139,63 @@ non-Spring code) may use them. The starter aggregates it.
   List<KeyValue<String, Integer>> counts = List.of(KeyValue.of("alice", 3), KeyValue.of("bob", 5));
   ```
 
+### Date and time — `DateUtils`
+
+The date/time toolkit with one opinionated entry point: `getCurrentDateTime()` returns the
+*served* current time from the best available time source, not blindly the local clock:
+
+```java
+Date now = DateUtils.getCurrentDateTime();               // best available source
+Date cheap = DateUtils.getCurrentDateTimeSimpleInterval(); // cached offset, for hot paths
+Date exact = DateUtils.getDateFromDateTimeService();      // one direct read, no cache
+Date local = DateUtils.getSystemDateTime();               // local clock, ignoring sources
+```
+
+The rest of the class is a plain-Java toolbox: parsing/formatting (`parseDate`,
+`toDateTimeString`, common pattern constants), arithmetic (`addDay` / `addMonth` / ...),
+type conversion (`dateToLocalDateTime`, ...), calendar-day differences, day/week/month/
+quarter boundaries (`getDayBegin`, `getWeekEnd`, `getQuarterEnd`, ...), and enumeration
+helpers (`listDaysBetweenTime`, ...).
+
+**Time sources and fallback.** A source implements `DateTimeService`
+(`base.datetime` package) and is managed by the static `DateTimeRegistry`. Sources answer
+in this order, with automatic fallback whenever a source is unavailable (it returns
+`null` or throws — never an outage for the caller):
+
+1. the preferred source, if `integrate-boot.datetime.prefer` is configured;
+2. all registered sources by priority (a custom source you register yourself defaults to
+   outranking the shipped ones; then `redis`, then `db`);
+3. the local system clock — the built-in last resort, so `getCurrentDateTime()` never
+   throws and never returns `null`, even in a plain non-Spring application.
+
+`integrate-boot-redis` registers a `redis` source (Redis `TIME`, millisecond precision)
+and `integrate-boot-data` a `db` source (`select now()`) — automatically, whenever those
+modules are on the classpath with their infrastructure configured. Reads are cheap:
+a source that allows it has its offset from the local clock cached and refreshed in the
+background (default every 10 minutes) instead of paying a remote call per read.
+
+Shared switches (read by whichever datetime module is present):
+
+```yaml
+integrate-boot:
+  datetime:
+    prefer: redis          # redis | db | server | <custom type>; default: priority order
+    interval-enabled: true # cached-offset fast path; default true
+    check-interval: 10m    # offset refresh period; default 10 minutes
+```
+
+A custom time source is a class plus one line (picked up automatically when any datetime
+module is present; register it yourself via `DateTimeRegistry.register` otherwise):
+
+```java
+public class SatelliteDateTimeService implements DateTimeService {
+    @Override public String getType() { return "satellite"; }
+    @Override public Date getCurrentDate() {
+        try { return satelliteClient.now(); } catch (IOException e) { return null; } // fall back
+    }
+}
+```
+
 ## integrate-boot-data
 
 Data-access starter based on **MyBatis-Flex** + **Spring Boot**. Add it as a dependency and
@@ -152,6 +209,10 @@ up automatically.
 - Transactions via MyBatis-Flex's `FlexTransactionManager` — just use `@Transactional`
 - Sensible defaults, e.g. `map-underscore-to-camel-case` enabled so snake_case columns map
   to camelCase fields automatically
+- A **database time source** for `DateUtils`: `DbDateTimeService` (`select now()`) is
+  registered automatically whenever a datasource is configured, so
+  `DateUtils.getCurrentDateTime()` serves the database server's clock with automatic
+  fallback (see [Date and time — `DateUtils`](#date-and-time--dateutils))
 
 ### Usage
 
@@ -557,6 +618,10 @@ share the same Redis client and configuration — nothing extra is needed to kee
 - Optional extra Redis instances under `integrate-boot.redis.multi.*`, each exposing its own
   `RedissonClient` / `RedisTemplate` / `StringRedisTemplate` beans (inject by name)
 - Distributed-lock / collection APIs directly from `RedissonClient` (`RLock`, `RMap`, `RBucket`, ...)
+- A **Redis time source** for `DateUtils`: `RedisDateTimeService` (the Redis server clock,
+  via the `TIME` command) is registered automatically whenever a Redis connection is
+  configured — with both the redis and db sources present it is the preferred one
+  (see [Date and time — `DateUtils`](#date-and-time--dateutils))
 
 ### Usage
 
