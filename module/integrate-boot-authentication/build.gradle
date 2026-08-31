@@ -11,10 +11,16 @@ dependencies {
 
     api(libs.spring.boot.autoconfigure)
     // Spring Security core (AuthenticationManager, UserDetailsService, PasswordEncoder, ...).
-    api(libs.spring.boot.starter.security)
+    // Exclusions keep Boot's default Logback starter out of the published POM: the platform
+    // logs via SLF4J + Log4j2 (see integrate-boot-logging).
+    api(libs.spring.boot.starter.security) {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
     // Spring Authorization Server (bundled into Spring Security 7.1) as an OAuth2 authorization
     // server. Brings in the resource-server + JOSE + Nimbus JWT support transitively.
-    api(libs.spring.boot.starter.security.oauth2.authorization.server)
+    api(libs.spring.boot.starter.security.oauth2.authorization.server) {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
 
     // Generates configuration property metadata so IDEs can auto-complete
     // and document the properties consumed by this module.

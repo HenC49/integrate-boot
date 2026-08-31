@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Default Log4j2 configuration shipped with integrate-boot-logging (SLF4J facade, Log4j2 backend).
+
+  Spring Boot's Log4j2LoggingSystem discovers it automatically because it sits at the classpath
+  root under the standard name "log4j2.xml" — a service gets console + rolling file logs with
+  zero configuration. An application overrides it by shipping its own "log4j2-spring.xml"
+  (checked first by Spring Boot), its own "log4j2.xml" (application resources win over jars),
+  or by pointing "logging.config" at a custom file.
+
+  Tunable without replacing the file:
+    - APP_NAME : system property or environment variable (default: application) — the file name
+      stem and the rollover glob below.
+    - LOG_PATH : system property or environment variable (default: logs). Spring Boot's
+      "logging.file.path" property also sets the LOG_PATH system property before logging
+      initializes, so it controls this configuration too.
+    - Log levels at runtime via Spring Boot's standard "logging.level.*" properties.
+
+  Loggers are divided into three tiers (see the Loggers section below):
+    - info  : the default — business code logs at info through the root logger;
+    - warn  : third-party components (org.apache, io.netty, org.redisson, HikariCP) are capped
+              at warn so their noise never drowns business logs;
+    - debug : disabled by default — a ready-made debug Root block sits commented out; swap it
+              in (comment the info Root, uncomment the debug Root) when troubleshooting.
+-->
+<Configuration status="WARN">
+    <Properties>
+        <Property name="APP_NAME">${sys:APP_NAME:-${env:APP_NAME:-application}}</Property>
+        <Property name="LOG_PATH">${sys:LOG_PATH:-${env:LOG_PATH:-logs}}</Property>
+        <!-- PatternLayout appends throwable stack traces on its own (alwaysWriteExceptions). -->
+        <Property name="LOG_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%t] %logger{36} - %msg%n</Property>
+    </Properties>
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+        </Console>
+        <RollingFile name="File"
+                     fileName="${LOG_PATH}/${APP_NAME}.log"
+                     filePattern="${LOG_PATH}/${APP_NAME}-%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+            <Policies>
+                <TimeBasedTriggeringPolicy/>
+                <SizeBasedTriggeringPolicy size="100 MB"/>
+            </Policies>
+            <!-- Keep at most 30 archived files per day-index and delete archives older than 30 days. -->
+            <DefaultRolloverStrategy max="30">
+                <Delete basePath="${LOG_PATH}" maxDepth="1">
+                    <IfFileName glob="${APP_NAME}-*.log.gz">
+                        <IfLastModified age="30d"/>
+                    </IfFileName>
+                </Delete>
+            </DefaultRolloverStrategy>
+        </RollingFile>
+    </Appenders>
+    <Loggers>
+        <!-- ===== warn tier: third-party components log warn-and-above only, so business logs
+             stay readable. Raise or lower per package as needed. ===== -->
+        <Logger name="org.apache" level="warn"/>
+        <Logger name="io.netty" level="warn"/>
+        <Logger name="org.redisson" level="warn"/>
+        <Logger name="com.zaxxer.hikari" level="warn"/>
+
+        <!-- ===== info tier: the default. Business code logs at info through the root logger. ===== -->
+        <Root level="info">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="File"/>
+        </Root>
+
+        <!-- ===== debug tier: disabled by default. To troubleshoot, comment out the info Root
+             above, uncomment this block and restart. Without touching the file, change levels
+             at runtime via Spring Boot: logging.level.root=debug for everything, or
+             logging.level.com.example=debug to widen a single package.
+        <Root level="debug">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="File"/>
+        </Root>
+        -->
+    </Loggers>
+</Configuration>

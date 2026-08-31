@@ -4,6 +4,9 @@
 # Log file
 *.log
 
+# Rolled logs written by integrate-boot-logging's default log4j2.xml
+logs/
+
 # BlueJ files
 *.ctxt
 
@@ -37,3 +40,6 @@ out/
 
 # ZCode
 .zcode/
+
+.env
+.todolist

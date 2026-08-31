@@ -13,7 +13,11 @@ dependencies {
     // The starter auto-configures a RedissonClient and uses Redisson as the underlying
     // RedisConnectionFactory, so RedisTemplate and Redisson share the same client and the
     // same spring.data.redis.* configuration.
-    api(libs.redisson.spring.boot.starter)
+    // The exclusion keeps Boot's default Logback starter out of the published POM: the platform
+    // logs via SLF4J + Log4j2 (see integrate-boot-logging).
+    api(libs.redisson.spring.boot.starter) {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
     api(libs.spring.boot.autoconfigure)
     // Reuses the typedObjectMapper (Jackson 3, with type info) for Redis value serialization,
     // so cached values share one consistent, date-formatted ObjectMapper with the rest of the app.

@@ -9,7 +9,11 @@ dependencies {
     // Use the project BOM as the single source of dependency versions.
     api platform(project(':bom'))
 
-    api(libs.spring.boot.starter.cache)
+    // The exclusion keeps Boot's default Logback starter out of the published POM: the platform
+    // logs via SLF4J + Log4j2 (see integrate-boot-logging).
+    api(libs.spring.boot.starter.cache) {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
     api(libs.caffeine)
     api(libs.spring.boot.autoconfigure)
 

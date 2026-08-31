@@ -1,0 +1,23 @@
+plugins {
+    id 'java-library'
+}
+
+// Publish this module's jar + POM (see gradle/publishing.gradle).
+apply from: "$rootDir/gradle/publishing.gradle"
+
+dependencies {
+    // Use the project BOM as the single source of dependency versions.
+    api platform(project(':bom'))
+
+    api(libs.spring.boot.autoconfigure)
+
+    // Replaces Spring Boot's default Logback backend with Log4j2: brings log4j-slf4j2-impl
+    // (the SLF4J binding), log4j-core and log4j-jul, versions managed by
+    // spring-boot-dependencies through the BOM.
+    api(libs.spring.boot.starter.log4j2)
+
+    // The logging facade application code compiles against. It arrives transitively via
+    // log4j-slf4j2-impl but is declared explicitly so the module's contract — code against
+    // SLF4J, run on Log4j2 — is visible in the published POM.
+    api(libs.slf4j.api)
+}

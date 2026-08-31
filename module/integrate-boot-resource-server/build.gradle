@@ -8,9 +8,17 @@ dependencies {
     api platform(project(':bom'))
 
     api(libs.spring.boot.autoconfigure)
-    api(libs.spring.boot.starter.security)
-    api(libs.spring.boot.starter.web)
-    api(libs.spring.boot.starter.oauth2.resource.server)
+    // Exclusions keep Boot's default Logback starter out of the published POM: the platform
+    // logs via SLF4J + Log4j2 (see integrate-boot-logging).
+    api(libs.spring.boot.starter.security) {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+    api(libs.spring.boot.starter.web) {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+    api(libs.spring.boot.starter.oauth2.resource.server) {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
 
     annotationProcessor(libs.spring.boot.configuration.processor)
 

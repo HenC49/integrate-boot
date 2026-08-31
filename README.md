@@ -10,6 +10,7 @@ integrate-boot
 ├── module
 │   ├── integrate-boot-data      # Data-access integration (MyBatis-Flex + Spring Boot)
 │   ├── integrate-boot-jackson   # Jackson serialization defaults (date format + typed mapper)
+│   ├── integrate-boot-logging   # Service logging: SLF4J facade over Log4j2 + default config
 │   ├── integrate-boot-cache     # Local cache integration (Caffeine + Spring Cache)
 │   ├── integrate-boot-redis     # Redis integration (Redisson + Spring Data Redis)
 │   ├── integrate-boot-authentication # OAuth2 authorization server + password grant (optional)
@@ -228,6 +229,71 @@ private ObjectMapper typedObjectMapper;
 
 The Redis module already wires its `RedisTemplate` to this mapper, so cached objects (including
 date/time fields) serialize consistently with the rest of the app.
+
+## integrate-boot-logging
+
+Unified service logging: application code logs through the **SLF4J** facade, and the backend is
+**Log4j2** (replacing Spring Boot's default Logback). The module ships a production-sane default
+`log4j2.xml` inside its jar, so a service gets console output plus daily/size-rolled log files
+with zero configuration.
+
+### What you get out of the box — zero config
+
+- **SLF4J → Log4j2 binding** via `spring-boot-starter-log4j2` (`log4j-slf4j2-impl`). Logback
+  (`spring-boot-starter-logging`) is excluded from every starter the platform publishes, so the
+  two backends never end up on one classpath (that combination breaks logging outright).
+- **Default `log4j2.xml`** discovered automatically from the module jar: console + rolling file
+  `${LOG_PATH}/${APP_NAME}.log`, daily rollover plus a 100 MB size cap, gzipped archives kept
+  for 30 days.
+- **Level tiers.** Loggers are divided into three tiers (see below): **info** is the default,
+  **warn** caps third-party noise, **debug** ships disabled.
+- **Startup guard.** On boot the module verifies the classpath is in the intended shape and logs
+  a loud, actionable `ERROR` if Logback leaked in or SLF4J bound to the wrong provider — instead
+  of silently losing logs to a classpath-order accident.
+
+### Level tiers — info / warn / debug
+
+| Tier  | Applies to | Default |
+|-------|------------|---------|
+| info  | Business code (root logger) | **active** — the default level |
+| warn  | Third-party components (`org.apache`, `io.netty`, `org.redisson`, HikariCP) | active |
+| debug | Troubleshooting | **disabled** — the debug block sits commented out |
+
+To debug, either swap the commented `Root` blocks in the shipped `log4j2.xml` (comment the info
+`Root`, uncomment the debug `Root`, restart), or avoid touching the file entirely and change
+levels at runtime via Spring Boot — `logging.level.root=debug` for everything, or
+`logging.level.<package>=debug` to widen a single package.
+
+### Usage
+
+Nothing is required to enable the defaults. Tune without replacing the config file:
+
+```yaml
+logging:
+  file:
+    path: /var/logs/my-service   # sets LOG_PATH for the shipped log4j2.xml
+  level:
+    root: info                   # runtime levels via Spring Boot as usual
+    com.example.mapper: debug
+```
+
+- `APP_NAME` — system property or environment variable (default `application`); the log file
+  name stem.
+- `LOG_PATH` — system property or environment variable (default `logs`); also driven by Spring
+  Boot's `logging.file.path` property.
+
+An application replaces the shipped configuration with its own `log4j2-spring.xml` (checked
+first by Spring Boot), its own `log4j2.xml` (application resources win over jars), or by
+pointing `logging.config` at a custom file.
+
+When the application declares additional Spring Boot starters itself, keep excluding Logback
+from them — the published exclusions only cover the starters integrate-boot declares:
+
+```groovy
+implementation('org.springframework.boot:spring-boot-starter-actuator') {
+    exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+}
+```
 
 ## integrate-boot-cache
 
@@ -601,8 +667,9 @@ per application (Spring Security 7 rejects two matches-any-request chains at sta
 
 Depending on `integrate-boot-starter` transitively brings in `integrate-boot-data`
 (MyBatis-Flex + datasource auto-configuration), `integrate-boot-jackson` (date/time defaults +
-the typed `ObjectMapper`), `integrate-boot-cache` (Caffeine + the local cache managers) and
-`integrate-boot-redis` (Redisson + RedisTemplate), so a service only needs one dependency to
+the typed `ObjectMapper`), `integrate-boot-cache` (Caffeine + the local cache managers),
+`integrate-boot-redis` (Redisson + RedisTemplate) and `integrate-boot-logging` (SLF4J facade
+over Log4j2 with the default `log4j2.xml`), so a service only needs one dependency to
 get the whole stack.
 
 ### Bean location conventions

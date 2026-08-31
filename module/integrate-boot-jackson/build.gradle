@@ -11,7 +11,11 @@ dependencies {
 
     api(libs.spring.boot.autoconfigure)
     // Jackson 3.x (tools.jackson.*) with the JSR-310 / JDK8 support bundled in databind.
-    api(libs.spring.boot.starter.json)
+    // The exclusion keeps Boot's default Logback starter out of the published POM: the platform
+    // logs via SLF4J + Log4j2 (see integrate-boot-logging).
+    api(libs.spring.boot.starter.json) {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
 
     // Generates configuration property metadata so IDEs can auto-complete
     // and document the properties consumed by this module.

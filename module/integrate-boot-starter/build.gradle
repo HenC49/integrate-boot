@@ -25,5 +25,15 @@ dependencies {
     // brings in Redisson + RedisTemplate (both sharing the same Redis client).
     api project(':module:integrate-boot-redis')
 
-    api(libs.spring.boot.starter)
+    // Aggregate the logging layer: SLF4J facade over a Log4j2 backend plus a default
+    // log4j2.xml (console + rolling file), so every service logs the same way.
+    api project(':module:integrate-boot-logging')
+
+    // The logging layer replaces Spring Boot's default Logback with Log4j2. Excluding
+    // spring-boot-starter-logging here (the exclusion travels with the published POM)
+    // keeps Logback off consumers' classpaths; the logging module's startup guard
+    // reports any path that still leaks it in (e.g. starters added by the application).
+    api(libs.spring.boot.starter) {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
 }

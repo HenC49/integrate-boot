@@ -9,9 +9,15 @@ dependencies {
     // Use the project BOM as the single source of dependency versions.
     implementation platform(project(':bom'))
 
-    // The whole stack comes transitively from the starter (data layer + @IntegrateBoot).
+    // The whole stack comes transitively from the starter (data layer + @IntegrateBoot),
+    // including the logging layer (SLF4J facade over Log4j2).
     implementation project(':module:integrate-boot-starter')
-    implementation(libs.spring.boot.starter.web)
+    implementation(libs.spring.boot.starter.web) {
+        // The starter already excludes Logback from its own Spring Boot dependencies; this
+        // app-declared starter would bring it back through its own path, so exclude it here
+        // too — the pattern applications follow when adding extra Spring Boot starters.
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
 
     // H2 in-memory database for the demo; no external DB needed.
     runtimeOnly(libs.h2)

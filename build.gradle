@@ -5,6 +5,15 @@ subprojects {
     // Apply the Java 21 toolchain and the JUnit Platform test setup to every JVM subproject.
     plugins.withType(JavaPlugin).tap {
         configureEach {
+            // integrate-boot-logging standardizes the platform on SLF4J + Log4j2. Boot's default
+            // spring-boot-starter-logging (Logback + log4j-to-slf4j) must stay off every classpath
+            // in this build — next to log4j-slf4j2-impl it forms a routing cycle that breaks
+            // logging outright. This prunes it from all resolution paths inside the repo; each
+            // library module additionally publishes the exclusion on its own starter dependencies
+            // so external consumers' POMs stay Logback-free too.
+            configurations.configureEach {
+                exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+            }
             java {
                 toolchain {
                     languageVersion = JavaLanguageVersion.of(21)
