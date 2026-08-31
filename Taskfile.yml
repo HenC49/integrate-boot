@@ -1,0 +1,67 @@
+# Task runner for integrate-boot — thin, self-documenting wrappers around the Gradle
+# wrapper so local development and CI pipelines share one set of commands.
+# Requires go-task: https://taskfile.dev  (brew install go-task)
+
+version: '3'
+
+# Secrets for the sample app (e.g. REDIS_PASSWORD) live in .env locally; the file is
+# git-ignored and simply absent on CI, where go-task skips the missing file silently.
+dotenv: ['.env']
+
+tasks:
+  default:
+    desc: List the available tasks
+    cmds:
+      - task --list
+
+  clean:
+    desc: Remove all Gradle build outputs
+    cmds:
+      - ./gradlew clean
+
+  build:
+    desc: Compile everything and run all tests (Gradle build)
+    cmds:
+      - ./gradlew build
+
+  test:
+    desc: Run all tests only
+    cmds:
+      - ./gradlew test
+
+  ci:
+    desc: CI pipeline — clean build, no daemon, full stack traces
+    cmds:
+      - ./gradlew --no-daemon --stacktrace clean build
+
+  publish-local:
+    desc: Publish BOM + all modules into the local staging tree (build/repo)
+    cmds:
+      - ./gradlew publishAllPublicationsToLocalStageRepository
+
+  publish-maven-local:
+    desc: Publish BOM + all modules to the local Maven repository (~/.m2/repository)
+    cmds:
+      - ./gradlew publishToMavenLocal
+
+  publish-module:
+    desc: Publish one module into build/repo (MODULE=integrate-boot-data, or MODULE=bom)
+    preconditions:
+      - sh: test -n "{{.MODULE}}"
+        msg: "MODULE is required, e.g. `task publish-module MODULE=integrate-boot-data`"
+    vars:
+      # The BOM publishes a javaPlatform publication; library modules a mavenJava one.
+      PUBLISH_TASK: '{{if eq .MODULE "bom"}}:bom:publishIntegrateBootBomPublicationToLocalStageRepository{{else}}:module:{{.MODULE}}:publishMavenJavaPublicationToLocalStageRepository{{end}}'
+    cmds:
+      - ./gradlew {{.PUBLISH_TASK}}
+
+  set-version:
+    desc: Set the project version in gradle.properties (VERSION=1.2.3)
+    preconditions:
+      - sh: test -n "{{.VERSION}}"
+        msg: "VERSION is required, e.g. `task set-version VERSION=1.2.3`"
+    cmds:
+      # sed -i.bak and [[:space:]] keep this portable across BSD (macOS) and GNU sed;
+      # gradle.properties writes "version = x.y.z" with spaces around the '='.
+      - sed -i.bak -E 's/^version[[:space:]]*=.*/version = {{.VERSION}}/' gradle.properties
+      - rm -f gradle.properties.bak

@@ -34,6 +34,20 @@ This project uses Gradle (Groovy DSL). Use the included wrapper — no local Gra
 ./gradlew build
 ```
 
+### Taskfile
+
+A [Taskfile](https://taskfile.dev) wraps the common Gradle invocations so local development
+and CI pipelines share one entry point (`brew install go-task` for the `task` command).
+Locally it also loads `.env`, so secrets like `REDIS_PASSWORD` don't need to be typed per run:
+
+```bash
+task build          # compile everything and run all tests
+task test           # tests only
+task ci             # clean, no-daemon build as run by CI
+task publish-local  # BOM + all modules into build/repo
+task --list         # all tasks, incl. per-module publishing and version bumping
+```
+
 ## Publishing
 
 Every library module is published with the same Maven repository layout used by Spring Boot:
