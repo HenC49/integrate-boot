@@ -17,6 +17,7 @@ spring-boot-starter-cache = { module = "org.springframework.boot:spring-boot-sta
 spring-boot-starter-json = { module = "org.springframework.boot:spring-boot-starter-json" }
 spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security" }
 spring-boot-starter-security-oauth2-authorization-server = { module = "org.springframework.boot:spring-boot-starter-security-oauth2-authorization-server" }
+spring-boot-starter-oauth2-resource-server = { module = "org.springframework.boot:spring-boot-starter-oauth2-resource-server" }
 
 # MyBatis-Flex
 mybatis-flex-spring-boot4-starter = { module = "com.mybatis-flex:mybatis-flex-spring-boot4-starter", version.ref = "mybatis-flex" }

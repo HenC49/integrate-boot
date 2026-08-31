@@ -1,0 +1,2 @@
+com.github.henc.integrateboot.resource.config.JwtTokenValidationAutoConfiguration
+com.github.henc.integrateboot.resource.config.ResourceServerAutoConfiguration

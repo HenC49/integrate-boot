@@ -6,6 +6,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClaimAccessor;
@@ -27,16 +28,17 @@ import org.springframework.security.oauth2.server.authorization.token.OAuth2Toke
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
 
+import java.security.Principal;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
  * Authenticates a {@code grant_type=password} request: resolves the resource owner through the
- * configured {@link org.springframework.security.core.userdetails.UserDetailsService}, verifies
- * the password with a {@link PasswordEncoder}, then mints an access token (and refresh token if
- * the client supports it) via the shared {@link OAuth2TokenGenerator} and persists the
- * authorization through {@link OAuth2AuthorizationService}.
+ * configured {@link UserDetailsService}, verifies the password with a {@link PasswordEncoder},
+ * then mints an access token (and refresh token if the client supports it) via the shared
+ * {@link OAuth2TokenGenerator} and persists the authorization through
+ * {@link OAuth2AuthorizationService}.
  */
 public class OAuth2PasswordAuthenticationProvider implements AuthenticationProvider {
 
@@ -44,32 +46,26 @@ public class OAuth2PasswordAuthenticationProvider implements AuthenticationProvi
     public static final String PASSWORD_GRANT_ATTRIBUTE_KEY =
             "org.springframework.security.oauth2.server.authorization.authentication.OAuth2PasswordAuthenticationToken.principal";
 
-    /** Attribute key under which the authenticated user principal is stashed on the authorization. */
-    public static final String AUTHORIZED_USER_ATTRIBUTE = "java.security.auth.principal";
-
-    private final OAuth2AuthorizationService authorizationService;
+    private final UserDetailsService userDetailsService;
     private final PasswordEncoder passwordEncoder;
+    private final OAuth2AuthorizationService authorizationService;
     private OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator;
 
     /**
-     * @param userDetailsService resolves the resource owner by username
-     * @param passwordEncoder    verifies the submitted password against the stored hash
+     * @param userDetailsService   resolves the resource owner by username
+     * @param passwordEncoder      verifies the submitted password against the stored hash
      * @param authorizationService persists the resulting OAuth2Authorization
      */
     public OAuth2PasswordAuthenticationProvider(
-            org.springframework.security.core.userdetails.UserDetailsService userDetailsService,
+            UserDetailsService userDetailsService,
             PasswordEncoder passwordEncoder, OAuth2AuthorizationService authorizationService) {
         Assert.notNull(userDetailsService, "userDetailsService cannot be null");
         Assert.notNull(passwordEncoder, "passwordEncoder cannot be null");
         Assert.notNull(authorizationService, "authorizationService cannot be null");
-        this.authorizationService = authorizationService;
-        this.passwordEncoder = passwordEncoder;
-        // Wrap the UserDetailsService lazily — it is read on each authenticate() call so a
-        // refresh of the user store is always honoured.
         this.userDetailsService = userDetailsService;
+        this.passwordEncoder = passwordEncoder;
+        this.authorizationService = authorizationService;
     }
-
-    private final org.springframework.security.core.userdetails.UserDetailsService userDetailsService;
 
     /**
      * Set the token generator used to mint access / refresh tokens. Required before the provider
@@ -121,7 +117,6 @@ public class OAuth2PasswordAuthenticationProvider implements AuthenticationProvi
                 .authorizationGrantType(AuthConst.PASSWORD_GRANT_TYPE)
                 .authorizationGrant(passwordAuthentication)
                 .tokenType(OAuth2TokenType.ACCESS_TOKEN)
-                .put(AUTHORIZED_USER_ATTRIBUTE, usernamePasswordAuthentication)
                 .build();
 
         OAuth2Token generatedAccessToken = tokenGenerator.generate(tokenContext);
@@ -145,7 +140,6 @@ public class OAuth2PasswordAuthenticationProvider implements AuthenticationProvi
                     .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
                     .authorizationGrant(passwordAuthentication)
                     .tokenType(OAuth2TokenType.REFRESH_TOKEN)
-                    .put(AUTHORIZED_USER_ATTRIBUTE, usernamePasswordAuthentication)
                     .build();
             OAuth2Token generatedRefreshToken = tokenGenerator.generate(refreshContext);
             if (generatedRefreshToken != null) {
@@ -153,12 +147,16 @@ public class OAuth2PasswordAuthenticationProvider implements AuthenticationProvi
             }
         }
 
-        // Persist the authorization.
+        // Persist the authorization. The attribute under Principal.class.getName() is what
+        // Spring Authorization Server's built-in refresh_token provider reads back when the
+        // client later refreshes — without it the refresh grant fails with
+        // "principal cannot be null".
         OAuth2Authorization.Builder authorizationBuilder = OAuth2Authorization.withRegisteredClient(registeredClient)
                 .principalName(userDetails.getUsername())
                 .authorizationGrantType(AuthConst.PASSWORD_GRANT_TYPE)
                 .authorizedScopes(authorizedScopes)
-                .attribute(PASSWORD_GRANT_ATTRIBUTE_KEY, passwordAuthentication);
+                .attribute(PASSWORD_GRANT_ATTRIBUTE_KEY, passwordAuthentication)
+                .attribute(Principal.class.getName(), usernamePasswordAuthentication);
         if (generatedAccessToken instanceof ClaimAccessor claimAccessor) {
             authorizationBuilder.token(accessToken, metadata -> metadata.put(
                     OAuth2Authorization.Token.CLAIMS_METADATA_NAME, claimAccessor.getClaims()));
@@ -194,13 +192,6 @@ public class OAuth2PasswordAuthenticationProvider implements AuthenticationProvi
         Set<String> intersection = new LinkedHashSet<>(requested);
         intersection.retainAll(allowed);
         return intersection;
-    }
-
-    /** Refresh tokens only matter when the client actually requested them; clients control this. */
-
-    /** Refresh tokens only matter when the client actually requested them; clients control this. */
-    private static boolean isRefreshTokenEnabled(RegisteredClient registeredClient) {
-        return true;
     }
 
     private static OAuth2AccessToken toAccessToken(OAuth2Token token, Set<String> scopes) {

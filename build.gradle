@@ -2,13 +2,22 @@
 // The root project is an aggregator only; it does not apply any JVM plugin.
 
 subprojects {
-    // Apply the Java 21 toolchain to every JVM subproject.
+    // Apply the Java 21 toolchain and the JUnit Platform test setup to every JVM subproject.
     plugins.withType(JavaPlugin).tap {
         configureEach {
             java {
                 toolchain {
                     languageVersion = JavaLanguageVersion.of(21)
                 }
+            }
+            test {
+                useJUnitPlatform()
+            }
+            dependencies {
+                // Spring Boot 4.1 ships JUnit Platform 6.x, but Gradle 8.14's built-in
+                // junit-platform-launcher is 1.x. Align the launcher to the engine version so
+                // the JUnit Jupiter engine can discover and run tests.
+                testRuntimeOnly(libs.junit.platform.launcher)
             }
         }
     }

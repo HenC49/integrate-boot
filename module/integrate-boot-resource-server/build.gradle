@@ -1,0 +1,20 @@
+plugins {
+    id 'java-library'
+}
+
+apply from: "$rootDir/gradle/publishing.gradle"
+
+dependencies {
+    api platform(project(':bom'))
+
+    api(libs.spring.boot.autoconfigure)
+    api(libs.spring.boot.starter.security)
+    api(libs.spring.boot.starter.web)
+    api(libs.spring.boot.starter.oauth2.resource.server)
+
+    annotationProcessor(libs.spring.boot.configuration.processor)
+
+    testImplementation(libs.spring.boot.starter.test)
+    // Coexistence test: the authorization-server module and this module on one classpath.
+    testImplementation project(':module:integrate-boot-authentication')
+}

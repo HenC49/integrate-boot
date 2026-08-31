@@ -13,6 +13,7 @@ integrate-boot
 │   ├── integrate-boot-cache     # Local cache integration (Caffeine + Spring Cache)
 │   ├── integrate-boot-redis     # Redis integration (Redisson + Spring Data Redis)
 │   ├── integrate-boot-authentication # OAuth2 authorization server + password grant (optional)
+│   ├── integrate-boot-resource-server # Bearer resource protection + token validation port (optional)
 │   └── integrate-boot-starter   # Bootstrap entry: @IntegrateBoot annotation + aggregated deps
 └── test
     └── integrate-boot-test      # Sample app exercising the modules end-to-end
@@ -493,12 +494,109 @@ integrate-boot:
 Define your own `JWKSource<SecurityContext>` bean to load a fixed RSA key pair (instead of the
 auto-generated one) for production.
 
+### Multi-node deployment and key rotation
+
+The default RSA key pair is generated randomly once per process. It is convenient for local
+development only and must not be used by a multi-node production authorization service: each node
+would otherwise sign tokens with a different private key, so a token issued by one node could be
+rejected by another node or by a resource service after a restart.
+
+For production, all authorization-server nodes must load the same signing key from a shared secret
+source such as a KMS, Vault, Kubernetes Secret, cloud Secret Manager or an encrypted keystore. Keep
+the key id (`kid`) stable across restarts, and configure resource services with the corresponding
+public JWK set or a shared token-introspection endpoint. Never commit private keys or keystore
+passwords to the repository.
+
+Rotate keys by publishing the new public key while retaining the old public key, switching all
+issuer nodes to the new private key, and removing the old public key only after the maximum lifetime
+of tokens signed with it has elapsed. This prevents valid tokens from becoming unusable during a
+rolling deployment. In production configuration, prefer failing startup when the shared signing
+key is unavailable rather than silently generating a temporary key.
+
+> The `integrate-boot-resource-server` module does not generate tokens or signing keys. Its
+> `TokenValidationPort` implementation must validate against the issuer's shared public keys or a
+> centralized introspection service.
+
 > Note: the `password` grant carries the user's credentials to the token endpoint, so prefer
 > `authorization_code` + PKCE for human-facing clients. The password grant is provided mainly for
 > machine-to-machine and legacy-client compatibility.
 
-## integrate-boot-starter
-Bootstrap entry point that aggregates the data layer and exposes the
+## integrate-boot-resource-server
+
+Standalone bearer-token resource protection for business services. This is an **optional** module and
+is intentionally independent from `integrate-boot-authentication`: it does not issue tokens, create
+JWK signing keys, expose OAuth2 authorization endpoints, or include the password grant.
+
+### Usage
+
+Depend on the module directly:
+
+```groovy
+dependencies {
+    implementation platform('com.github.henc:integrate-boot-bom:0.0.1-SNAPSHOT')
+    implementation 'com.github.henc:integrate-boot-resource-server'
+}
+```
+
+#### Zero code — point it at the issuer's JWKS endpoint
+
+Configure the authorization server's JWKS URL and the module installs a JWT-backed
+`TokenValidationPort` (signature + expiry validation via Spring Security's `NimbusJwtDecoder`;
+`sub` becomes the subject, `scope`/`scp` become `SCOPE_x` authorities):
+
+```yaml
+integrate-boot:
+  resource-server:
+    jwt:
+      jwk-set-uri: http://auth-service:8080/oauth2/jwks
+      issuer: https://auth-service        # optional: additionally verify the iss claim
+```
+
+#### Or provide your own validation port
+
+For opaque tokens, introspection endpoints or custom claim mapping, implement the
+framework-independent validation port. The module passes the raw token value without the
+`Bearer ` prefix; the application owns signature, issuer, audience and expiry validation
+(an application-provided port always overrides the JWT default above):
+
+```java
+@Component
+public class AccessTokenValidator implements TokenValidationPort {
+    @Override
+    public TokenValidationResult validate(String token) {
+        // Validate the token with the service's issuer or token-introspection client.
+        return TokenValidationResult.valid(
+                "user-123",
+                Map.of("tenant", "acme"),
+                Set.of("SCOPE_orders:read"),
+                Instant.now().plusSeconds(300));
+    }
+}
+```
+
+Requests with `Authorization: Bearer <token>` are authenticated using the returned subject and
+authorities. Invalid, empty, malformed or rejected tokens receive HTTP 401. Requests without a
+bearer header continue through the chain and are rejected by the default authorization rule unless
+the path is configured as public:
+
+```yaml
+integrate-boot:
+  resource-server:
+    permit-all-paths:
+      - /health
+      - /public/**
+```
+
+The default chain is stateless and protects every other request. Define your own
+`SecurityFilterChain` or the `TokenValidationPort` implementation when the service needs custom
+rules or a different token backend. The resource-server module is not aggregated by
+`integrate-boot-starter`; services can add it without pulling in the authorization server.
+
+When both this module and `integrate-boot-authentication` are on the classpath (a monolith that
+both issues and validates tokens), this module's filter chain owns the application endpoints and
+the authorization-server module's convenience chain backs off — exactly one default chain exists
+per application (Spring Security 7 rejects two matches-any-request chains at startup).
+
 `@IntegrateBoot` convenience annotation.
 
 Depending on `integrate-boot-starter` transitively brings in `integrate-boot-data`

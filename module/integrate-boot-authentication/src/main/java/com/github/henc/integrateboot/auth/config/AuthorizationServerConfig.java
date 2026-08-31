@@ -37,6 +37,7 @@ import org.springframework.security.oauth2.server.authorization.token.OAuth2Acce
 import org.springframework.security.oauth2.server.authorization.token.OAuth2RefreshTokenGenerator;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
+import org.springframework.security.oauth2.server.authorization.InMemoryOAuth2AuthorizationService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.util.matcher.RequestMatcher;
@@ -60,7 +61,8 @@ import java.util.UUID;
  *       store via {@link UserDetailsPasswordService}.</li>
  * </ul>
  */
-@AutoConfiguration
+@AutoConfiguration(afterName =
+        "com.github.henc.integrateboot.resource.config.ResourceServerAutoConfiguration")
 @ConditionalOnClass({OAuth2AuthorizationServerConfigurer.class, RegisteredClientRepository.class})
 @EnableConfigurationProperties(AuthenticationProperties.class)
 public class AuthorizationServerConfig {
@@ -74,18 +76,17 @@ public class AuthorizationServerConfig {
     @Order(1)
     public SecurityFilterChain authorizationServerSecurityFilterChain(
             HttpSecurity http, AuthenticationProperties properties,
-            RegisteredClientRepository registeredClientRepository,
             OAuth2AuthorizationService authorizationService,
             OAuth2TokenGenerator<? extends OAuth2Token> tokenGenerator,
             PasswordEncoder passwordEncoder, UserDetailsService userDetailsService) throws Exception {
 
         OAuth2AuthorizationServerConfigurer authorizationServerConfigurer =
                 new OAuth2AuthorizationServerConfigurer();
-        authorizationServerConfigurer.registeredClientRepository(registeredClientRepository);
-        authorizationServerConfigurer.authorizationService(authorizationService);
-        authorizationServerConfigurer.tokenGenerator(tokenGenerator);
 
-        // Register the custom password grant on the token endpoint, if enabled.
+        // Register the custom password grant on the token endpoint, if enabled. The
+        // registered-client repository / authorization service / token generator are resolved
+        // from the bean container by Spring's OAuth2ConfigurerUtils — the configurer's setters
+        // may only be called after it is applied to the builder.
         if (properties.isPasswordGrantEnabled()) {
             OAuth2PasswordAuthenticationProvider passwordProvider =
                     new OAuth2PasswordAuthenticationProvider(
@@ -103,7 +104,7 @@ public class AuthorizationServerConfig {
                 .securityMatcher(endpointsMatcher)
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
                 .csrf(csrf -> csrf.ignoringRequestMatchers(endpointsMatcher))
-                .apply(authorizationServerConfigurer);
+                .with(authorizationServerConfigurer, Customizer.withDefaults());
         http.oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
 
         return http.build();
@@ -136,15 +137,28 @@ public class AuthorizationServerConfig {
     }
 
     /**
-     * Adds the {@code iss} (issuer) claim to access-token JWTs.
+     * Extension point for customizing access-token JWTs. The {@code iss} claim is added by the
+     * {@link JwtGenerator} itself (resolved from the authorization-server context); applications
+     * that want additional claims define their own bean to override this no-op default.
      */
     @Bean
     @ConditionalOnMissingBean(name = "integrateBootJwtCustomizer")
     public OAuth2TokenCustomizer<JwtEncodingContext> integrateBootJwtCustomizer() {
         return context -> {
-            // The issuer is resolved from the authorization-server context by Spring's defaults;
-            // this hook is the extension point for adding extra claims per-application.
         };
+    }
+
+    /**
+     * In-memory authorization store persisting issued access/refresh tokens. Spring Boot's
+     * authorization-server auto-configuration does <em>not</em> provide this bean, so without a
+     * default here the token endpoint cannot start. Applications that run multiple instances
+     * should override it with a JDBC/Redis-backed implementation (and likewise the
+     * {@link RegisteredClientRepository}).
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public OAuth2AuthorizationService oAuth2AuthorizationService() {
+        return new InMemoryOAuth2AuthorizationService();
     }
 
     /**
@@ -205,10 +219,15 @@ public class AuthorizationServerConfig {
      * tokens issued by the authorization server above, and permits the configured public paths.
      * Business apps can override this bean ({@code @ConditionalOnMissingBean}) to customise
      * authorization rules.
+     *
+     * <p>Backs off when the {@code integrate-boot-resource-server} module provides its own chain
+     * ({@code resourceServerSecurityFilterChain}): Spring Security 7 rejects two
+     * matches-any-request chains in one application ({@code UnreachableFilterChainException}),
+     * so exactly one default chain may exist.
      */
     @Bean
     @Order(2)
-    @ConditionalOnMissingBean(name = "defaultSecurityFilterChain")
+    @ConditionalOnMissingBean(name = {"defaultSecurityFilterChain", "resourceServerSecurityFilterChain"})
     public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http,
                                                           AuthenticationProperties properties) throws Exception {
         String[] permitAll = permitAllPaths(properties);

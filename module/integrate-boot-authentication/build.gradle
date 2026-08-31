@@ -19,4 +19,8 @@ dependencies {
     // Generates configuration property metadata so IDEs can auto-complete
     // and document the properties consumed by this module.
     annotationProcessor(libs.spring.boot.configuration.processor)
+
+    testImplementation(libs.spring.boot.starter.test)
+    // Parse token-endpoint JSON responses in the integration tests.
+    testImplementation(libs.spring.boot.starter.json)
 }
