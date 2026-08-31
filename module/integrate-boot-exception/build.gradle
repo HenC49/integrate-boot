@@ -1,0 +1,38 @@
+plugins {
+    id 'java-library'
+}
+
+// Publish this module's jar + POM (see gradle/publishing.gradle).
+apply from: "$rootDir/gradle/publishing.gradle"
+
+dependencies {
+    // Use the project BOM as the single source of dependency versions.
+    api platform(project(':bom'))
+
+    // The global handler renders every failure into the shared ResultInfo envelope.
+    api project(':module:integrate-boot-base')
+
+    // Global exception handling is web-layer infrastructure: the handler builds on
+    // @RestControllerAdvice and the servlet exception types from Spring MVC. The exclusion
+    // keeps Boot's default Logback starter out of the published POM (see
+    // integrate-boot-logging).
+    api(libs.spring.boot.starter.web) {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+
+    // Bean Validation, so @Valid failures surface as structured 400 responses instead of
+    // falling through to the generic 500 handler.
+    api(libs.spring.boot.starter.validation) {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+
+    // The handler logs through the SLF4J facade; the binding itself comes from
+    // integrate-boot-logging (aggregated by the starter).
+    implementation(libs.slf4j.api)
+
+    // Tests run on JUnit Jupiter + AssertJ; versions come from the project BOM. The
+    // platform is test-scoped, so it never appears in the published POM.
+    testImplementation platform(project(':bom'))
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.assertj:assertj-core'
+}

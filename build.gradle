@@ -19,6 +19,14 @@ subprojects {
                     languageVersion = JavaLanguageVersion.of(21)
                 }
             }
+            // Preserve method-parameter names in compiled classes. Spring Framework 7 resolves
+            // @PathVariable / @RequestParam / @Valid argument names from bytecode; without this
+            // flag every controller that does not spell out the name (e.g. @PathVariable Long id)
+            // fails at runtime with IllegalArgumentException. (The Spring Boot Gradle plugin
+            // would add it automatically; this build uses plain JVM plugins.)
+            tasks.withType(JavaCompile).configureEach {
+                options.compilerArgs << '-parameters'
+            }
             test {
                 useJUnitPlatform()
             }

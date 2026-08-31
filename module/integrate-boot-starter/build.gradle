@@ -33,6 +33,12 @@ dependencies {
     // log4j2.xml (console + rolling file), so every service logs the same way.
     api project(':module:integrate-boot-logging')
 
+    // Aggregate the exception layer: the common exception hierarchy (BaseException /
+    // ErrorCode and friends) plus the global @RestControllerAdvice that renders every
+    // failure into the shared ResultInfo envelope. Also brings the servlet web stack
+    // and Bean Validation transitively — the modules a business REST service needs.
+    api project(':module:integrate-boot-exception')
+
     // The logging layer replaces Spring Boot's default Logback with Log4j2. Excluding
     // spring-boot-starter-logging here (the exclusion travels with the published POM)
     // keeps Logback off consumers' classpaths; the logging module's startup guard

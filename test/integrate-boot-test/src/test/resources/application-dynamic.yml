@@ -1,9 +1,14 @@
 # Profile for the dynamic datasource integration test. Two in-memory H2 databases are
 # configured under mybatis-flex.datasource; the first (master) is the default.
+#
+# Script init is disabled here on purpose: the test seeds both datasources itself in
+# @BeforeEach, and schema.sql/data.sql would otherwise inject the shared seed rows into the
+# named in-memory databases too (they live for the whole test JVM), making the assertions
+# depend on which application contexts ran before this one.
 spring:
   sql:
     init:
-      mode: always
+      mode: never
 
 integrate-boot:
   data:

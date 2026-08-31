@@ -12,6 +12,7 @@ integrate-boot
 │   ├── integrate-boot-data      # Data-access integration (MyBatis-Flex + Spring Boot)
 │   ├── integrate-boot-jackson   # Jackson serialization defaults (date format + typed mapper)
 │   ├── integrate-boot-logging   # Service logging: SLF4J facade over Log4j2 + default config
+│   ├── integrate-boot-exception # Global exception handling: exception hierarchy + ResultInfo advice
 │   ├── integrate-boot-cache     # Local cache integration (Caffeine + Spring Cache)
 │   ├── integrate-boot-redis     # Redis integration (Redisson + Spring Data Redis)
 │   ├── integrate-boot-authentication # OAuth2 authorization server + password grant (optional)
@@ -322,6 +323,124 @@ from them — the published exclusions only cover the starters integrate-boot de
 ```groovy
 implementation('org.springframework.boot:spring-boot-starter-actuator') {
     exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+}
+```
+
+## integrate-boot-exception
+
+Global exception handling: a small unchecked exception hierarchy plus one
+`@RestControllerAdvice` that renders **every** failure into the shared `ResultInfo` envelope —
+expected business failures respond HTTP 200 with the envelope carrying the failure, protocol
+and client errors respond with their matching 4xx/5xx status. Controllers never hand-roll
+error responses.
+
+### What you get out of the box — zero config
+
+- **Common exceptions**, each carrying a business code, a message and an HTTP status:
+
+  | Exception               | HTTP | Default code |
+  |-------------------------|------|--------------|
+  | `BusinessException`     | 200  | `-1` (`ResultInfo.CODE_FAILURE`) |
+  | `BadRequestException`   | 400  | `400` |
+  | `UnauthorizedException` | 401  | `401` |
+  | `ForbiddenException`    | 403  | `403` |
+  | `NotFoundException`     | 404  | `404` |
+  | `ConflictException`     | 409  | `409` |
+
+  A business failure is a handled outcome, not a protocol error — `BusinessException` keeps
+  the HTTP layer at 200 and the envelope's `success=false` / `code` / `message` carry the
+  failure, exactly as `ResultInfo.failure(message)` would. The other classes map to their
+  matching 4xx status for callers that distinguish protocol-level errors.
+
+- **A global handler** that maps: any `BaseException` (see below) to its own code / message /
+  status; Bean Validation and argument-binding failures to `400` with the offending fields
+  spelled out; wrong HTTP method to `405`; unsupported media type to `415`; an unmatched path
+  to `404`; everything else to `500` with a generic message (the full stack trace goes to the
+  log, never to the client).
+- **Sane logging levels**: expected failures (business exceptions, 4xx) log at `WARN` without
+  a stack trace; unexpected ones log at `ERROR` with the full trace.
+- The module brings the servlet web stack and Bean Validation transitively, so a service gets
+  `@Valid` support together with structured 400 responses.
+
+### Usage — throw, don't catch
+
+```java
+throw new BusinessException("insufficient balance");
+// -> HTTP 200, {"success":false,"code":-1,"message":"insufficient balance"}
+
+throw new NotFoundException("order " + id + " not found");
+// -> HTTP 404, {"success":false,"code":404,"message":"order 1 not found"}
+
+throw new ConflictException(10003, "duplicate order id");   // explicit business code
+```
+
+Validation failures need no try/catch either — `@Valid` binding errors come back as a `400`
+with the field details joined into the message:
+
+```
+POST /errors/validate  {"name":"","age":200}
+-> HTTP 400, {"success":false,"code":400,"message":"name: must not be blank; age: must be less than or equal to 150"}
+```
+
+### Defining your own exceptions
+
+Two extension points, usable separately or together.
+
+**1. An error-code enum** (implements `ErrorCode`) — reuse the common exception classes with
+your own code range:
+
+```java
+public enum OrderErrorCode implements ErrorCode {
+    INSUFFICIENT_STOCK(10001, "insufficient stock"),
+    ORDER_NOT_FOUND(10002, "order not found");
+
+    private final int code;
+    private final String message;
+
+    OrderErrorCode(int code, String message) { this.code = code; this.message = message; }
+
+    @Override public int getCode() { return code; }
+    @Override public String getMessage() { return message; }
+}
+
+throw new BusinessException(OrderErrorCode.INSUFFICIENT_STOCK);
+// -> HTTP 200, {"success":false,"code":10001,"message":"insufficient stock"}
+
+throw new NotFoundException(OrderErrorCode.ORDER_NOT_FOUND);
+// -> HTTP 404, {"success":false,"code":10002,"message":"order not found"}
+```
+
+**2. An exception type** (extends `BaseException`) — for modules that want their own exception
+class. The global handler catches `BaseException`, so every subclass is handled automatically:
+
+```java
+public class OrderException extends BaseException {
+
+    public OrderException(ErrorCode errorCode) {
+        super(errorCode.getCode(), errorCode.getMessage(), HttpStatus.CONFLICT);
+    }
+}
+
+throw new OrderException(OrderErrorCode.INSUFFICIENT_STOCK);
+// -> HTTP 409, {"success":false,"code":10001,"message":"insufficient stock"}
+```
+
+### Replacing the handler
+
+The advice is registered by `ExceptionAutoConfiguration` behind `@ConditionalOnMissingBean` —
+define your own `globalExceptionHandler` bean to take over wholesale, e.g. to render **every**
+`BaseException` (not just `BusinessException`) as HTTP 200 with the envelope carrying the
+failure:
+
+```java
+@Bean
+public GlobalExceptionHandler globalExceptionHandler() {
+    return new GlobalExceptionHandler() {
+        @Override
+        public ResponseEntity<ResultInfo> handleBaseException(BaseException ex) {
+            return ResponseEntity.ok(ResultInfo.failure(ex.getCode(), ex.getMessage()));
+        }
+    };
 }
 ```
 
@@ -699,9 +818,10 @@ Depending on `integrate-boot-starter` transitively brings in `integrate-boot-bas
 (the `ResultInfo` / `KeyValue` base entities), `integrate-boot-data`
 (MyBatis-Flex + datasource auto-configuration), `integrate-boot-jackson` (date/time defaults +
 the typed `ObjectMapper`), `integrate-boot-cache` (Caffeine + the local cache managers),
-`integrate-boot-redis` (Redisson + RedisTemplate) and `integrate-boot-logging` (SLF4J facade
-over Log4j2 with the default `log4j2.xml`), so a service only needs one dependency to
-get the whole stack.
+`integrate-boot-redis` (Redisson + RedisTemplate), `integrate-boot-logging` (SLF4J facade
+over Log4j2 with the default `log4j2.xml`) and `integrate-boot-exception` (the common
+exception hierarchy + the global handler; also provides the servlet web stack and Bean
+Validation), so a service only needs one dependency to get the whole stack.
 
 ### Bean location conventions
 
@@ -767,7 +887,9 @@ long as it follows the layering rules below:
 
 Sample application that boots the whole stack with `@IntegrateBoot` over an in-memory H2
 database (no external setup) and verifies the modules end-to-end: conventional layer
-scanning, MyBatis-Flex mapper access, transactions, and underscore-to-camelCase mapping.
+scanning, MyBatis-Flex mapper access, transactions, underscore-to-camelCase mapping, and
+the global exception handler (business / not-found / conflict / validation / 405 / 404 /
+generic-500 responses, see `ErrorHandlingIT`).
 
 The Redis layer requires a running Redis instance. The connection is read from environment
 variables so no secret is stored in the repository — pass the password on the command line:
