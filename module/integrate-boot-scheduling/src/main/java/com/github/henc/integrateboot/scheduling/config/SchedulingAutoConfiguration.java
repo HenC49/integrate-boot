@@ -1,11 +1,14 @@
 package com.github.henc.integrateboot.scheduling.config;
 
 import com.xxl.job.core.executor.impl.XxlJobSpringExecutor;
+import com.github.henc.integrateboot.scheduling.core.SchedulingTaskHandler;
+import com.github.henc.integrateboot.scheduling.executor.JobMethodScanner;
 import com.github.henc.integrateboot.scheduling.executor.RegisteredSchedulingJobHandler;
 import com.github.henc.integrateboot.scheduling.executor.SchedulingTaskHandlerRegistry;
 import com.github.henc.integrateboot.scheduling.admin.InMemorySchedulingAdminService;
 import com.github.henc.integrateboot.scheduling.admin.SchedulingAdminController;
 import com.github.henc.integrateboot.scheduling.admin.SchedulingAdminService;
+import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -13,17 +16,35 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 @AutoConfiguration
 @ConditionalOnClass(XxlJobSpringExecutor.class)
 @ConditionalOnProperty(prefix = "integrate-boot.scheduling", name = "enabled", havingValue = "true")
 @EnableConfigurationProperties(SchedulingProperties.class)
 public class SchedulingAutoConfiguration {
 
+    /**
+     * Aggregates both discovery models into one registry: {@code SchedulingTaskHandler}
+     * beans (bean name = task id) and {@code @Job}-annotated methods on plain beans
+     * (annotation value or method name = task id). A task id claimed by both models
+     * fails startup rather than silently overriding one of them.
+     */
     @Bean
     @ConditionalOnMissingBean
     SchedulingTaskHandlerRegistry schedulingTaskHandlerRegistry(
-            java.util.Map<String, com.github.henc.integrateboot.scheduling.core.SchedulingTaskHandler> handlers) {
-        return new SchedulingTaskHandlerRegistry(handlers);
+            Map<String, SchedulingTaskHandler> handlers,
+            ConfigurableListableBeanFactory beanFactory) {
+        Map<String, SchedulingTaskHandler> merged = new LinkedHashMap<>(handlers);
+        JobMethodScanner.scan(beanFactory).forEach((taskId, annotatedHandler) -> {
+            SchedulingTaskHandler existing = merged.putIfAbsent(taskId, annotatedHandler);
+            if (existing != null) {
+                throw new IllegalStateException("Duplicate task id '" + taskId
+                        + "': declared both by a SchedulingTaskHandler bean and by a @Job method");
+            }
+        });
+        return new SchedulingTaskHandlerRegistry(merged);
     }
 
     @Bean(destroyMethod = "destroy")

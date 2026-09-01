@@ -1,6 +1,6 @@
 package com.github.henc.integrateboot.scheduling.executor;
 
-import com.github.henc.integrateboot.scheduling.core.SchedulingTaskContext;
+import com.github.henc.integrateboot.base.job.JobContext;
 import com.github.henc.integrateboot.scheduling.core.SchedulingTaskHandler;
 import com.xxl.job.core.context.XxlJobHelper;
 import com.xxl.job.core.handler.IJobHandler;
@@ -19,8 +19,10 @@ public final class RegisteredSchedulingJobHandler extends IJobHandler {
 
     @Override
     public void execute() throws Exception {
-        delegate.execute(new SchedulingTaskContext(taskId, XxlJobHelper.getShardIndex(),
-                XxlJobHelper.getJobParam(), Map.of("jobId", Long.toString(XxlJobHelper.getJobId()),
-                "logId", Long.toString(XxlJobHelper.getLogId()))));
+        // XXL-JOB 3.x exposes no sharding parameter, so shardingParameter stays null here.
+        delegate.execute(new JobContext(taskId, XxlJobHelper.getShardIndex(), null,
+                Map.of("jobId", Long.toString(XxlJobHelper.getJobId()),
+                "logId", Long.toString(XxlJobHelper.getLogId()),
+                "jobParam", String.valueOf(XxlJobHelper.getJobParam()))));
     }
 }

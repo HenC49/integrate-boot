@@ -57,3 +57,15 @@ tasks.register('e2eTest', Test) {
     shouldRunAfter test
     useJUnitPlatform()
 }
+
+// The in-process suite shares one JVM, and MyBatis-Flex's Db/Row APIs resolve their
+// session from a JVM-global registry keyed by datasource name — whichever context boots
+// first claims the "master" slot. DynamicDataSourceIT (with its own master+slave pair)
+// must therefore run before the default-profile classes, which its javadoc already
+// assumes. JUnit's default class order is deterministic but unspecified (discovery
+// order) and reshuffles whenever test classes are added, so pin class-name ordering
+// to turn that assumption into a guarantee.
+tasks.named('test') {
+    systemProperty 'junit.jupiter.testclass.order.default',
+            'org.junit.jupiter.api.ClassOrderer$ClassName'
+}
