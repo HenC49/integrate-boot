@@ -3,6 +3,7 @@ spring-boot = "4.1.0"
 mybatis-flex = "1.11.8"
 redisson = "4.1.0"
 junit-platform = "6.0.3"
+xxl-job = "3.4.2"
 
 [libraries]
 # Spring Boot
@@ -38,3 +39,6 @@ redisson-spring-boot-starter = { module = "org.redisson:redisson-spring-boot-sta
 # Test
 h2 = { module = "com.h2database:h2" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-platform" }
+
+# Scheduling
+xxl-job-core = { module = "com.xuxueli:xxl-job-core", version.ref = "xxl-job" }

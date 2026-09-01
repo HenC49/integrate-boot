@@ -10,6 +10,7 @@ include('module:integrate-boot-cache')
 include('module:integrate-boot-redis')
 include('module:integrate-boot-authentication')
 include('module:integrate-boot-resource-server')
+include('module:integrate-boot-scheduling')
 include('module:integrate-boot-starter')
 include('test:integrate-boot-test')
 

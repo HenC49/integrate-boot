@@ -38,6 +38,10 @@ dependencies {
 
         // Redis
         api(libs.redisson.spring.boot.starter)
+
+        // XXL-JOB Core provides the executor protocol and Spring-aware lifecycle. The
+        // optional scheduling module owns the application-facing adapter and management API.
+        api(libs.xxl.job.core)
     }
 }
 

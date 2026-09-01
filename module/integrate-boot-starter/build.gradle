@@ -39,6 +39,10 @@ dependencies {
     // and Bean Validation transitively — the modules a business REST service needs.
     api project(':module:integrate-boot-exception')
 
+    // Aggregate distributed scheduling. The module remains opt-in at runtime through
+    // integrate-boot.scheduling.enabled, so adding the starter does not start scheduling infrastructure.
+    api project(':module:integrate-boot-scheduling')
+
     // The logging layer replaces Spring Boot's default Logback with Log4j2. Excluding
     // spring-boot-starter-logging here (the exclusion travels with the published POM)
     // keeps Logback off consumers' classpaths; the logging module's startup guard
