@@ -34,6 +34,11 @@ tasks:
     cmds:
       - ./gradlew :test:integrate-boot-test:e2eTest
 
+  dynamic-test:
+    desc: Run dynamic-datasource integration tests in an isolated JVM (opt-in)
+    cmds:
+      - ./gradlew :test:integrate-boot-test:dynamicTest
+
   ci:
     desc: CI pipeline — clean build, no daemon, full stack traces
     cmds:

@@ -17,10 +17,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * it is (redis, db, or the system-clock fallback), it must track the real clock and must
  * never throw.
  *
- * <p>Named {@code TimeSources...} rather than {@code DateTime...} on purpose: JUnit runs
- * test classes in name order, and this default-profile context must start
- * <em>after</em> {@code DynamicDataSourceIT}'s context — see the ordering note on that
- * class.
+ * <p>The dynamic-datasource tests used to share this JVM and required careful context
+ * boot ordering (MyBatis-Flex keeps a JVM-global registry keyed by datasource name);
+ * they now run in their own JVM via the opt-in {@code dynamicTest} task, so this suite
+ * is order-independent.
  */
 @SpringBootTest
 class TimeSourcesIT {

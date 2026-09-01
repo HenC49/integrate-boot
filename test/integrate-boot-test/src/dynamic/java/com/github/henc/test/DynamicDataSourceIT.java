@@ -22,14 +22,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * and two datasources declared under {@code mybatis-flex.datasource}, queries are routed to
  * the right database via {@link DataSourceKey}.
  *
- * <p><b>Test-ordering caveat.</b> The {@link Db}/{@link Row} APIs resolve their session
- * factory from MyBatis-Flex's JVM-global {@code FlexGlobalConfig}, keyed by datasource
- * name — and single-datasource apps also name their datasource {@code "master"}. The
- * first application context started in the test JVM therefore claims the
- * {@code "master"} slot. This class must run before any default-profile test class so
- * its dynamic context wins; JUnit's deterministic class-name order guarantees that as
- * long as every default-profile test class is named after {@code DynamicDataSourceIT}
- * (e.g. {@code TimeSourcesIT}, not {@code DateTimeIT}).
+ * <p><b>Isolation.</b> The {@link Db}/{@link Row} APIs resolve their session factory
+ * from MyBatis-Flex's JVM-global {@code FlexGlobalConfig}, keyed by datasource name —
+ * and single-datasource apps also name their datasource {@code "master"}. Running this
+ * class in the same JVM as the default-profile suite would make both sides depend on
+ * context boot order, so it lives in the {@code dynamic} source set and runs in its
+ * own JVM through the dedicated {@code dynamicTest} Gradle task (opt-in, not part of
+ * {@code build}; run it via {@code task dynamic-test}).
  */
 @SpringBootTest
 @ActiveProfiles("dynamic")

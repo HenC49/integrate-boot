@@ -7,10 +7,23 @@ plugins {
 
 // Keep end-to-end tests in a separate source set so the regular unit/in-process integration
 // suite remains fast and does not require a running Redis instance merely for `test`/`build`.
+//
+// Dynamic-datasource integration tests are likewise optional and isolated (src/dynamic):
+// MyBatis-Flex's Db/Row APIs resolve their session from a JVM-global registry keyed by
+// datasource name, and single-datasource apps name theirs "master" too — running the
+// dynamic context in the same JVM as the default-profile suite made both sides depend on
+// boot order. A dedicated source set + task gives it its own JVM, so neither suite
+// constrains the other, and neither runs as part of `build`.
 sourceSets {
+    // No explicit srcDir lines: the java plugin already maps a source set named
+    // "e2e"/"dynamic" to src/<name>/java + src/<name>/resources by convention; declaring
+    // them again makes the same resource file enter the Copy task twice once the
+    // directory is non-empty (duplicate-entry failure).
     e2e {
-        java.srcDir 'src/e2e/java'
-        resources.srcDir 'src/e2e/resources'
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+    dynamic {
         compileClasspath += sourceSets.main.output
         runtimeClasspath += sourceSets.main.output
     }
@@ -19,6 +32,8 @@ sourceSets {
 configurations {
     e2eImplementation.extendsFrom implementation, testImplementation
     e2eRuntimeOnly.extendsFrom runtimeOnly, testRuntimeOnly
+    dynamicImplementation.extendsFrom implementation, testImplementation
+    dynamicRuntimeOnly.extendsFrom runtimeOnly, testRuntimeOnly
 }
 
 dependencies {
@@ -58,14 +73,14 @@ tasks.register('e2eTest', Test) {
     useJUnitPlatform()
 }
 
-// The in-process suite shares one JVM, and MyBatis-Flex's Db/Row APIs resolve their
-// session from a JVM-global registry keyed by datasource name — whichever context boots
-// first claims the "master" slot. DynamicDataSourceIT (with its own master+slave pair)
-// must therefore run before the default-profile classes, which its javadoc already
-// assumes. JUnit's default class order is deterministic but unspecified (discovery
-// order) and reshuffles whenever test classes are added, so pin class-name ordering
-// to turn that assumption into a guarantee.
-tasks.named('test') {
-    systemProperty 'junit.jupiter.testclass.order.default',
-            'org.junit.jupiter.api.ClassOrderer$ClassName'
+// Runs only the dynamic-datasource integration tests, in their own JVM (see the
+// sourceSets block above for why isolation matters). Opt-in like e2eTest: it is not
+// part of `build`/`check`, run it explicitly via `task dynamic-test`.
+tasks.register('dynamicTest', Test) {
+    description = 'Runs the dynamic-datasource integration tests in an isolated JVM.'
+    group = 'verification'
+    testClassesDirs = sourceSets.dynamic.output.classesDirs
+    classpath = sourceSets.dynamic.runtimeClasspath
+    shouldRunAfter test
+    useJUnitPlatform()
 }
