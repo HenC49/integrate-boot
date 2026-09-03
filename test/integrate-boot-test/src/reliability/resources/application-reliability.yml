@@ -1,0 +1,9 @@
+# Only the module's own switch is set here: the recommended Modulith defaults (registry
+# table bootstrap via spring.modulith.events.jdbc.schema-initialization.enabled and
+# restart re-delivery via spring.modulith.events.republish-outstanding-events-on-restart)
+# are contributed by the event module's ReliabilityDefaultsEnvironmentPostProcessor —
+# and this opt-in suite is exactly what validates that glue end to end.
+integrate-boot:
+  event:
+    reliability:
+      enabled: true

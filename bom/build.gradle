@@ -42,6 +42,15 @@ dependencies {
         // XXL-JOB Core provides the executor protocol and Spring-aware lifecycle. The
         // optional scheduling module owns the application-facing adapter and management API.
         api(libs.xxl.job.core)
+
+        // Spring Modulith backs the event module's optional reliability layer (a transactional
+        // outbox for application events). Version coupling: Modulith minors track Spring Boot
+        // minors — 2.1.x pairs with Boot 4.1.x; upgrading Boot to 4.2 requires Modulith 2.2+
+        // in lockstep (the event module declares these as compileOnly on purpose, so the
+        // artifacts never reach consumers' classpaths unless requested explicitly).
+        api(libs.spring.modulith.starter.jdbc)
+        api(libs.spring.modulith.events.jackson)
+        api(libs.spring.modulith.events.api)
     }
 }
 

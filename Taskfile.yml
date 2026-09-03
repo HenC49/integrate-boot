@@ -39,6 +39,11 @@ tasks:
     cmds:
       - ./gradlew :test:integrate-boot-test:dynamicTest
 
+  reliability-test:
+    desc: Run event-reliability (Modulith outbox) integration tests in an isolated JVM (opt-in)
+    cmds:
+      - ./gradlew :test:integrate-boot-test:reliabilityTest
+
   ci:
     desc: CI pipeline — clean build, no daemon, full stack traces
     cmds:

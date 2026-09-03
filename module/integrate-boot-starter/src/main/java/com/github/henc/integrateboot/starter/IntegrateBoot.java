@@ -18,9 +18,10 @@ import java.lang.annotation.Target;
  *
  * <p>Annotating the main class with {@code @IntegrateBoot} enables Spring Boot
  * auto-configuration and component-scans the <em>conventional</em> layer packages — any
- * package named {@code controller}, {@code service}, {@code service.impl} or {@code domain},
- * at any depth under the application. A service therefore does not need to live under a
- * fixed root package; it only needs to follow the layering conventions:
+ * package named {@code controller}, {@code service}, {@code service.impl}, {@code domain}
+ * or {@code listener}, at any depth under the application. A service therefore does not
+ * need to live under a fixed root package; it only needs to follow the layering
+ * conventions:
  *
  * <table>
  *   <caption>Bean location conventions</caption>
@@ -29,6 +30,7 @@ import java.lang.annotation.Target;
  *   <tr><td>Service interface</td><td>{@code **.service.**}</td><td>{@code xxx.service.XxxService}</td></tr>
  *   <tr><td>Service implementation</td><td>{@code **.service.impl.**}</td><td>{@code xxx.service.impl.XxxServiceImpl}</td></tr>
  *   <tr><td>Repository</td><td>{@code **.domain.**}</td><td>{@code xxx.domain.XxxRepository}</td></tr>
+ *   <tr><td>Event listener</td><td>{@code **.listener.**}</td><td>{@code xxx.event.listener.XxxListeners}</td></tr>
  * </table>
  *
  * <p>Typical usage:
@@ -67,7 +69,8 @@ import java.lang.annotation.Target;
                 "**.controller.**",
                 "**.service.**",
                 "**.service.impl.**",
-                "**.domain.**"
+                "**.domain.**",
+                "**.listener.**"
         }
 )
 public @interface IntegrateBoot {

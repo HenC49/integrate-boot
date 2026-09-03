@@ -5,7 +5,7 @@
 ## 结构
 
 - `bom/` — BOM（java-platform），全项目依赖版本的唯一来源；artifactId 为 `integrate-boot-bom`
-- `module/` — 11 个库模块：`base`（纯 Java 实体/日期工具/`@Job` 任务注解，无框架依赖）、`data`（MyBatis-Flex + 动态数据源）、`jackson`、`logging`（SLF4J + Log4j2）、`exception`（全局异常 + ResultInfo）、`cache`（Caffeine）、`redis`（Redisson）、`authentication`（OAuth2 授权服务）、`resource-server`、`scheduling`（XXL-JOB 定时任务：发现 `@Job` 注解方法与 `SchedulingTaskHandler` bean，运行时经 `integrate-boot.scheduling.enabled` 选择性启用）、`starter`（聚合入口 + `@IntegrateBoot`）
+- `module/` — 12 个库模块：`base`（纯 Java 实体/日期工具/`@Job` 任务注解，无框架依赖）、`data`（MyBatis-Flex + 动态数据源）、`jackson`、`logging`（SLF4J + Log4j2）、`exception`（全局异常 + ResultInfo）、`cache`（Caffeine）、`redis`（Redisson）、`authentication`（OAuth2 授权服务）、`resource-server`、`scheduling`（XXL-JOB 定时任务：发现 `@Job` 注解方法与 `SchedulingTaskHandler` bean，运行时经 `integrate-boot.scheduling.enabled` 选择性启用）、`event`（进程内事件总线：`EventBus` 门面封装 Spring 原生事件 + `@AsyncEventListener` + 统一 `@EnableAsync`；Modulith outbox 可靠层可选，`integrate-boot.event.reliability.enabled` 开关，Modulith 依赖 compileOnly 不随 POM 传递）、`starter`（聚合入口 + `@IntegrateBoot`，约定层扫描含 `**.listener.**`）
 - `test/integrate-boot-test/` — 端到端示例应用（H2 内存库），集成测试以 `*IT` 命名
 - `gradle/libs.versions.toml` — 版本目录；`gradle/publishing.gradle` — 库模块共享发布约定；根 `build.gradle` — 全子项目通用配置
 
@@ -19,6 +19,8 @@ task test           # 仅测试
 task ci             # clean + --no-daemon 完整构建
 task publish-local  # BOM + 全部模块发布到 build/repo
 task set-version VERSION=x.y.z
+task dynamic-test   # 动态数据源 IT（独立 JVM，可选）
+task reliability-test # 事件可靠层 IT：Modulith outbox（独立 JVM，可选）
 ```
 
 单模块发布：`task publish-module MODULE=integrate-boot-data`。单模块测试：`./gradlew :module:integrate-boot-base:test`。

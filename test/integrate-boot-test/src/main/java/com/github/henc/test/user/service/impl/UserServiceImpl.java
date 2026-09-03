@@ -1,5 +1,7 @@
 package com.github.henc.test.user.service.impl;
 
+import com.github.henc.integrateboot.event.EventBus;
+import com.github.henc.test.event.UserCreated;
 import com.github.henc.test.user.domain.UserRepository;
 import com.github.henc.test.user.entity.User;
 import com.github.henc.test.user.service.UserService;
@@ -16,9 +18,11 @@ import java.util.List;
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
+    private final EventBus eventBus;
 
-    public UserServiceImpl(UserRepository userRepository) {
+    public UserServiceImpl(UserRepository userRepository, EventBus eventBus) {
         this.userRepository = userRepository;
+        this.eventBus = eventBus;
     }
 
     @Override
@@ -39,6 +43,10 @@ public class UserServiceImpl implements UserService {
         // insert() returns the number of affected rows; the auto-generated id is written
         // back into the entity by MyBatis-Flex.
         userRepository.insert(user);
+        // Announce the fact without knowing who reacts: async listeners run decoupled from
+        // this transaction, AFTER_COMMIT listeners (and, with the reliability layer enabled,
+        // the outbox) only fire once it commits.
+        eventBus.publish(new UserCreated(user.getId(), user.getUserName()));
         return user;
     }
 }

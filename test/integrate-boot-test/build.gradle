@@ -27,6 +27,13 @@ sourceSets {
         compileClasspath += sourceSets.main.output
         runtimeClasspath += sourceSets.main.output
     }
+    // Event-reliability (Spring Modulith outbox) integration tests are opt-in for the same
+    // reason as dynamic: enabling the registry creates its table in the shared H2 database
+    // and boots the Modulith infrastructure, which the default suite must not depend on.
+    reliability {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
 }
 
 configurations {
@@ -34,6 +41,8 @@ configurations {
     e2eRuntimeOnly.extendsFrom runtimeOnly, testRuntimeOnly
     dynamicImplementation.extendsFrom implementation, testImplementation
     dynamicRuntimeOnly.extendsFrom runtimeOnly, testRuntimeOnly
+    reliabilityImplementation.extendsFrom implementation, testImplementation
+    reliabilityRuntimeOnly.extendsFrom runtimeOnly, testRuntimeOnly
 }
 
 dependencies {
@@ -62,6 +71,17 @@ dependencies {
     // Spring Boot 4.1's live HTTP test client is a separate module. It provides both
     // RestTestClient and @AutoConfigureRestTestClient for random-port end-to-end tests.
     e2eImplementation(libs.spring.boot.resttestclient)
+
+    // Spring Modulith backs the optional event-reliability layer: its event publication
+    // registry (transactional outbox) is what integrate-boot-event.reliability.enabled
+    // switches on. Declared only for the opt-in reliability source set, never for main —
+    // exactly how consumers are expected to add them (the event module keeps them
+    // compileOnly, so they never arrive transitively).
+    // Note: Modulith 2.1.1 pins spring-boot-starter 4.1.1 in its POM, so this isolated
+    // test JVM upgrades the Boot artifacts to 4.1.1 (a patch bump over the project's 4.1.0).
+    reliabilityImplementation(libs.spring.modulith.starter.jdbc)
+    reliabilityImplementation(libs.spring.modulith.events.jackson)
+    reliabilityImplementation(libs.spring.modulith.events.api)
 }
 
 tasks.register('e2eTest', Test) {
@@ -81,6 +101,18 @@ tasks.register('dynamicTest', Test) {
     group = 'verification'
     testClassesDirs = sourceSets.dynamic.output.classesDirs
     classpath = sourceSets.dynamic.runtimeClasspath
+    shouldRunAfter test
+    useJUnitPlatform()
+}
+
+// Runs only the event-reliability (Modulith outbox) integration tests, in their own JVM.
+// Opt-in like dynamicTest: not part of `build`/`check`, run it explicitly via
+// `task reliability-test`.
+tasks.register('reliabilityTest', Test) {
+    description = 'Runs the event-reliability (Spring Modulith outbox) integration tests in an isolated JVM.'
+    group = 'verification'
+    testClassesDirs = sourceSets.reliability.output.classesDirs
+    classpath = sourceSets.reliability.runtimeClasspath
     shouldRunAfter test
     useJUnitPlatform()
 }

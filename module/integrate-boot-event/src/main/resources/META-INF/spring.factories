@@ -1,0 +1,4 @@
+# Environment post-processors register through spring.factories (not the
+# AutoConfiguration.imports file, which is exclusive to auto-configurations).
+org.springframework.boot.env.EnvironmentPostProcessor=\
+  com.github.henc.integrateboot.event.config.ReliabilityDefaultsEnvironmentPostProcessor

@@ -1,0 +1,32 @@
+plugins {
+    id 'java-library'
+}
+
+// Publish this module's jar + POM (see gradle/publishing.gradle).
+apply from: "$rootDir/gradle/publishing.gradle"
+
+dependencies {
+    // Use the project BOM as the single source of dependency versions.
+    api platform(project(':bom'))
+    api project(':module:integrate-boot-base')
+
+    // Auto-configuration support; also brings spring-context, which carries the whole
+    // native event API (ApplicationEventPublisher / @EventListener / @Async) the bus wraps.
+    api(libs.spring.boot.autoconfigure)
+
+    // The platform logs through the SLF4J facade only (never the Log4j2 API directly).
+    implementation(libs.slf4j.api)
+
+    // Reliability layer: Spring Modulith's event publication registry (transactional outbox
+    // with re-delivery of incomplete publications). compileOnly on purpose — these artifacts
+    // must not travel transitively through the published POM, because Modulith ships its own
+    // auto-configurations that would otherwise activate (and create its registry tables) for
+    // every consumer of this module. Opt in by declaring the two artifacts explicitly, plus
+    // integrate-boot.event.reliability.enabled=true.
+    compileOnly(libs.spring.modulith.starter.jdbc)
+    compileOnly(libs.spring.modulith.events.jackson)
+
+    annotationProcessor(libs.spring.boot.configuration.processor)
+
+    testImplementation(libs.spring.boot.starter.test)
+}

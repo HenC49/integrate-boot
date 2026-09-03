@@ -17,6 +17,8 @@ integrate-boot
 │   ├── integrate-boot-redis     # Redis integration (Redisson + Spring Data Redis)
 │   ├── integrate-boot-authentication # OAuth2 authorization server + password grant (optional)
 │   ├── integrate-boot-resource-server # Bearer resource protection + token validation port (optional)
+│   ├── integrate-boot-scheduling # Distributed scheduling on XXL-JOB: @Job discovery + registry (opt-in)
+│   ├── integrate-boot-event     # In-process event bus: EventBus facade + async takeover (+ optional outbox)
 │   └── integrate-boot-starter   # Bootstrap entry: @IntegrateBoot annotation + aggregated deps
 └── test
     └── integrate-boot-test      # Sample app exercising the modules end-to-end
@@ -914,6 +916,7 @@ long as it follows the layering rules below:
 | Service     | `**.service.**`      | `xxx.service.XxxService`         |
 | Service impl| `**.service.impl.**` | `xxx.service.impl.XxxServiceImpl`|
 | Repository  | `**.domain.**`       | `xxx.domain.XxxRepository`       |
+| Event listener | `**.listener.**`  | `xxx.event.listener.XxxListeners`|
 
 ### Usage
 
@@ -947,7 +950,9 @@ long as it follows the layering rules below:
    │   ├── controller/UserController.java
    │   ├── service/UserService.java
    │   ├── service/impl/UserServiceImpl.java
-   │   └── domain/UserRepository.java
+   │   ├── domain/UserRepository.java
+   │   ├── event/UserCreated.java
+   │   └── event/listener/UserListeners.java
    └── order
        ├── controller/OrderController.java
        └── ...
@@ -959,8 +964,125 @@ long as it follows the layering rules below:
    @IntegrateBoot(exclude = { RedisAutoConfiguration.class })
    ```
 
-   To scan additional packages beyond the conventions, add a regular `@ComponentScan`
-   next to `@IntegrateBoot`, or fall back to `@SpringBootApplication`.
+To scan additional packages beyond the conventions, add a regular `@ComponentScan`
+next to `@IntegrateBoot`, or fall back to `@SpringBootApplication`.
+
+## integrate-boot-event
+
+In-process event bus on Spring's native event mechanism: modules communicate through
+plain business records and one `EventBus` facade, without any external broker.
+
+### What you get out of the box — zero config
+
+- `EventBus` — a thin logging facade over `ApplicationEventPublisher`; inject it and
+  `publish(...)`. Events are plain objects (records recommended), no base class required.
+- `@AsyncEventListener` — an `@EventListener + @Async` shortcut: the listener runs on
+  Boot's `applicationTaskExecutor` (virtual-thread backed when
+  `spring.threads.virtual.enabled=true`), decoupled from the publisher's thread and
+  transaction.
+- Unified `@EnableAsync` — the platform owns async configuration, so applications never
+  write their own. Boot 4's `AsyncConfigurer` wrapping is honoured (the module registers
+  itself before `TaskExecutionAutoConfiguration`).
+- A failure safety net — a failing async listener is error-logged and announced through
+  the synchronous `EventListenerFailedEvent` meta-event (recursion-guarded); the
+  publisher is never disturbed.
+- `IntegrationEvent` — an optional marker interface documenting cross-module events
+  (the future distributed bridge will select on it).
+- Listeners in `**.listener.**` packages are picked up by `@IntegrateBoot`'s
+  conventional scan (event payload classes may live anywhere, e.g. `xxx.event`).
+
+### Listener contracts
+
+Delivery semantics are chosen by the *listener*, never the publisher:
+
+| Contract | Annotation | Failure behavior |
+|----------|------------|------------------|
+| Synchronous, in the publisher's transaction | `@EventListener` | propagates to the publisher and rolls back its transaction — that is the point of sync events |
+| Asynchronous, best-effort | `@AsyncEventListener` | logged + `EventListenerFailedEvent`; publisher unaffected |
+| After the publishing transaction commits | `@TransactionalEventListener(phase = AFTER_COMMIT)` | with the reliability layer: persisted and re-delivered |
+| Durable: after commit + async + own transaction | `@ApplicationModuleListener` (Modulith) | outbox-backed; re-delivered on failure and restart |
+
+### Usage
+
+```java
+// The event: a plain record; IntegrationEvent is an optional marker for cross-module facts.
+public record UserCreated(Long id, String userName) implements IntegrationEvent {}
+
+// Publish — from a @Transactional service the natural fit.
+@Service
+public class UserServiceImpl implements UserService {
+
+    private final UserRepository userRepository;
+    private final EventBus eventBus;
+
+    // ...
+
+    @Override
+    @Transactional
+    public User create(User user) {
+        userRepository.insert(user);
+        eventBus.publish(new UserCreated(user.getId(), user.getUserName()));
+        return user;
+    }
+}
+
+// React — each listener picks its own delivery contract.
+@Component
+public class UserListeners {
+
+    @AsyncEventListener
+    public void sendWelcomeMail(UserCreated event) { /* ... */ }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void refreshProjection(UserCreated event) { /* ... */ }
+}
+```
+
+### Configuration
+
+```yaml
+integrate-boot:
+  event:
+    enabled: true          # master switch (default on — plain in-process wrapper, no infrastructure)
+    async:
+      enabled: true        # unified @EnableAsync takeover (default on)
+    reliability:
+      enabled: false       # transactional outbox via Spring Modulith (opt-in, see below)
+```
+
+### Optional reliability layer (transactional outbox)
+
+A plain `@TransactionalEventListener` delivery vanishes if the listener fails or the
+application crashes between commit and delivery. Switching the reliability layer on
+backs such deliveries with Spring Modulith's event publication registry (an outbox):
+each publication is stored in the same transaction as the business data, and incomplete
+ones are re-delivered after restart or through Modulith's `IncompleteEventPublications`.
+
+The Modulith artifacts never arrive transitively (the event module keeps them
+`compileOnly` so its auto-configurations cannot leak onto consumers' classpaths), so
+opting in is explicit — declare the artifacts (versions come from the BOM), flip the
+switch, and mark durable listeners with `@ApplicationModuleListener`:
+
+```groovy
+dependencies {
+    implementation platform('com.github.henc:integrate-boot-bom')
+    implementation 'org.springframework.modulith:spring-modulith-starter-jdbc'
+    implementation 'org.springframework.modulith:spring-modulith-events-jackson'
+}
+```
+
+```yaml
+integrate-boot:
+  event:
+    reliability:
+      enabled: true
+```
+
+The switch additionally contributes recommended defaults (registry table bootstrap when
+missing, re-delivery of outstanding publications on restart); any explicit
+`spring.modulith.*` setting overrides them. Requires `spring-jdbc` + a `DataSource`
+(provided by `integrate-boot-data` in this stack). Version coupling: Modulith 2.1.x
+pairs with Spring Boot 4.1.x — the BOM pins them in lockstep.
 
 ## test/integrate-boot-test
 
@@ -978,3 +1100,9 @@ REDIS_PASSWORD=<your-redis-password> ./gradlew :test:integrate-boot-test:test
 ```
 
 `REDIS_HOST`, `REDIS_PORT` and `REDIS_DATABASE` default to `localhost` / `6379` / `0`.
+
+Besides the in-process suite, two opt-in suites run in their own JVMs through dedicated
+Gradle tasks: the dynamic-datasource tests (`task dynamic-test`, see
+`DynamicDataSourceIT`) and the event-reliability tests that exercise the Spring Modulith
+outbox end to end (`task reliability-test`, see `EventReliabilityIT` — the reliability
+source set adds the Modulith artifacts exactly the way a consumer would).

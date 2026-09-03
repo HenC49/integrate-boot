@@ -4,6 +4,9 @@ mybatis-flex = "1.11.8"
 redisson = "4.1.0"
 junit-platform = "6.0.3"
 xxl-job = "3.4.2"
+# Spring Modulith minors track Spring Boot minors (2.1.x <-> Boot 4.1.x); bump in lockstep
+# with the spring-boot version above when upgrading across Boot minor versions.
+spring-modulith = "2.1.1"
 
 [libraries]
 # Spring Boot
@@ -42,3 +45,9 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 
 # Scheduling
 xxl-job-core = { module = "com.xuxueli:xxl-job-core", version.ref = "xxl-job" }
+
+# Event reliability (Spring Modulith event publication registry — transactional outbox
+# for application events; consumed by the optional reliability layer of integrate-boot-event)
+spring-modulith-starter-jdbc = { module = "org.springframework.modulith:spring-modulith-starter-jdbc", version.ref = "spring-modulith" }
+spring-modulith-events-jackson = { module = "org.springframework.modulith:spring-modulith-events-jackson", version.ref = "spring-modulith" }
+spring-modulith-events-api = { module = "org.springframework.modulith:spring-modulith-events-api", version.ref = "spring-modulith" }
