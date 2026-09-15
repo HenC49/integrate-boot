@@ -25,8 +25,8 @@
 -->
 <Configuration status="WARN">
     <Properties>
-        <Property name="APP_NAME">${sys:APP_NAME:-${env:APP_NAME:-application}}</Property>
-        <Property name="LOG_PATH">${sys:LOG_PATH:-${env:LOG_PATH:-logs}}</Property>
+        <Property name="APPLICATION_NAME">${sys:APP_NAME:-${env:APP_NAME:-application}}</Property>
+        <Property name="LOGGING_PATH">${sys:LOG_PATH:-${env:LOG_PATH:-logs}}</Property>
         <!-- PatternLayout appends throwable stack traces on its own (alwaysWriteExceptions). -->
         <Property name="LOG_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%t] %logger{36} - %msg%n</Property>
     </Properties>
@@ -35,8 +35,8 @@
             <PatternLayout pattern="${LOG_PATTERN}"/>
         </Console>
         <RollingFile name="File"
-                     fileName="${LOG_PATH}/${APP_NAME}.log"
-                     filePattern="${LOG_PATH}/${APP_NAME}-%d{yyyy-MM-dd}-%i.log.gz">
+                     fileName="${LOGGING_PATH}/${APPLICATION_NAME}.log"
+                     filePattern="${LOGGING_PATH}/${APPLICATION_NAME}-%d{yyyy-MM-dd}-%i.log.gz">
             <PatternLayout pattern="${LOG_PATTERN}"/>
             <Policies>
                 <TimeBasedTriggeringPolicy/>
@@ -44,8 +44,8 @@
             </Policies>
             <!-- Keep at most 30 archived files per day-index and delete archives older than 30 days. -->
             <DefaultRolloverStrategy max="30">
-                <Delete basePath="${LOG_PATH}" maxDepth="1">
-                    <IfFileName glob="${APP_NAME}-*.log.gz">
+                <Delete basePath="${LOGGING_PATH}" maxDepth="1">
+                    <IfFileName glob="${APPLICATION_NAME}-*.log.gz">
                         <IfLastModified age="30d"/>
                     </IfFileName>
                 </Delete>
