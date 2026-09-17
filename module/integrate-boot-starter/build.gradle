@@ -48,6 +48,12 @@ dependencies {
     // Modulith outbox) is not transitively included — consumers opt in explicitly.
     api project(':module:integrate-boot-event')
 
+    // Aggregate object storage: the OssStorage facade (save / stream / copy / delete) with
+    // the filesystem-backed default implementation. Activation is bean-driven — the
+    // auto-configured storage only appears once the business registers its
+    // OssMetadataStore implementation.
+    api project(':module:integrate-boot-oss')
+
     // The logging layer replaces Spring Boot's default Logback with Log4j2. Excluding
     // spring-boot-starter-logging here (the exclusion travels with the published POM)
     // keeps Logback off consumers' classpaths; the logging module's startup guard

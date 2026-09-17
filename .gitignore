@@ -7,6 +7,9 @@
 # Rolled logs written by integrate-boot-logging's default log4j2.xml
 logs/
 
+# Default content root of integrate-boot-oss's filesystem implementation
+oss/
+
 # BlueJ files
 *.ctxt
 

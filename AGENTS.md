@@ -5,7 +5,7 @@
 ## 结构
 
 - `bom/` — BOM（java-platform），全项目依赖版本的唯一来源；artifactId 为 `integrate-boot-bom`
-- `module/` — 12 个库模块：`base`（纯 Java 实体/日期工具/`@Job` 任务注解，无框架依赖）、`data`（MyBatis-Flex + 动态数据源）、`jackson`、`logging`（SLF4J + Log4j2）、`exception`（全局异常 + ResultInfo）、`cache`（Caffeine）、`redis`（Redisson）、`authentication`（OAuth2 授权服务）、`resource-server`、`scheduling`（XXL-JOB 定时任务：发现 `@Job` 注解方法与 `SchedulingTaskHandler` bean，运行时经 `integrate-boot.scheduling.enabled` 选择性启用）、`event`（进程内事件总线：`EventBus` 门面封装 Spring 原生事件 + `@AsyncEventListener` + 统一 `@EnableAsync`；Modulith outbox 可靠层可选，`integrate-boot.event.reliability.enabled` 开关，Modulith 依赖 compileOnly 不随 POM 传递）、`starter`（聚合入口 + `@IntegrateBoot`，约定层扫描含 `**.listener.**`）
+- `module/` — 13 个库模块：`base`（纯 Java 实体/日期工具/`@Job` 任务注解，无框架依赖）、`data`（MyBatis-Flex + 动态数据源）、`jackson`、`logging`（SLF4J + Log4j2）、`exception`（全局异常 + ResultInfo）、`cache`（Caffeine）、`redis`（Redisson）、`authentication`（OAuth2 授权服务）、`resource-server`、`scheduling`（XXL-JOB 定时任务：发现 `@Job` 注解方法与 `SchedulingTaskHandler` bean，运行时经 `integrate-boot.scheduling.enabled` 选择性启用）、`event`（进程内事件总线：`EventBus` 门面封装 Spring 原生事件 + `@AsyncEventListener` + 统一 `@EnableAsync`；Modulith outbox 可靠层可选，`integrate-boot.event.reliability.enabled` 开关，Modulith 依赖 compileOnly 不随 POM 传递）、`oss`（文件存储：`OssStorage` 门面含保存/取流/断点续读/复制/删除，文件系统默认实现分片存放在 `integrate-boot.oss.filesystem.root` 下；元数据持久化 `OssMetadataStore` SPI 由业务实现，该 bean 存在即激活默认存储）、`starter`（聚合入口 + `@IntegrateBoot`，约定层扫描含 `**.listener.**`）
 - `test/integrate-boot-test/` — 端到端示例应用（H2 内存库），集成测试以 `*IT` 命名
 - `gradle/libs.versions.toml` — 版本目录；`gradle/publishing.gradle` — 库模块共享发布约定；根 `build.gradle` — 全子项目通用配置
 
@@ -33,7 +33,7 @@ task reliability-test # 事件可靠层 IT：Modulith outbox（独立 JVM，可�
 - **编译参数 `-parameters`**：由根 `build.gradle` 统一注入。Spring Framework 7 从字节码解析参数名，缺失会导致 `@PathVariable` 等运行时报错；新模块不要破坏该配置。
 - **版本只改一处**：新增/升级依赖在 `gradle/libs.versions.toml` 声明，并视需要加入 `bom/build.gradle` 的 constraints；模块 build.gradle 一律 `platform(project(':bom'))` 引版本，不写版本号。
 - **测试平台对齐**：Spring Boot 4.1 带 JUnit Platform 6.x，Gradle 内置 launcher 是 1.x，依赖根 build.gradle 注入的 `junit-platform-launcher` 对齐，勿删。
-- **Spring Boot 4 拆分点**：MockMvc 自动配置在 `spring-boot-starter-webmvc-test`（不在 starter-test 内）。
+- **Spring Boot 4 拆分点**：MockMvc 自动配置在 `spring-boot-starter-webmvc-test`（不在 starter-test 内）；Jackson 升级为 3.x，包名 `tools.jackson.*`（如 `tools.jackson.databind.ObjectMapper`，注解仍在 `com.fasterxml.jackson.annotation`）。
 
 ## 架构与编码约定
 
@@ -46,5 +46,5 @@ task reliability-test # 事件可靠层 IT：Modulith outbox（独立 JVM，可�
 ## 其他
 
 - 提交信息风格：`[A]新增xxx` / `[M]修改xxx`（中文，A=新增，M=修改）。
-- `.env`（git-ignored）存放样例应用密钥如 `REDIS_PASSWORD`；`logs/` 是 logging 模块默认配置产出的运行日志，均已忽略。
+- `.env`（git-ignored）存放样例应用密钥如 `REDIS_PASSWORD`；`logs/` 是 logging 模块默认配置产出的运行日志，`oss/` 是 oss 模块文件系统实现的默认内容根目录，均已忽略。
 - 改动认证/资源服务、动态数据源等敏感区前，先读 `README.md` 对应章节。
