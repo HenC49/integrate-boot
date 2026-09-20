@@ -13,9 +13,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2AuthorizationServerConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -40,9 +44,12 @@ import org.springframework.security.oauth2.server.authorization.token.OAuth2Toke
 import org.springframework.security.oauth2.server.authorization.InMemoryOAuth2AuthorizationService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
+import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
 import java.time.Duration;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -59,6 +66,9 @@ import java.util.UUID;
  *   <li>A {@link PasswordEncoder} and a placeholder {@link UserDetailsService} so the password
  *       grant has something to authenticate against until the application plugs in its own user
  *       store via {@link UserDetailsPasswordService}.</li>
+ *   <li>A demo public client ({@code pkce-client}, no secret) restricted to the
+ *       authorization-code grant with mandatory PKCE, so secret-less browser/SPA clients work
+ *       out of the box (RFC 7636).</li>
  * </ul>
  */
 @AutoConfiguration(afterName =
@@ -104,10 +114,28 @@ public class AuthorizationServerConfig {
                 .securityMatcher(endpointsMatcher)
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
                 .csrf(csrf -> csrf.ignoringRequestMatchers(endpointsMatcher))
-                .with(authorizationServerConfigurer, Customizer.withDefaults());
-        http.oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
+                .with(authorizationServerConfigurer, Customizer.withDefaults())
+                // Unauthenticated browser requests to /oauth2/authorize (the human in the
+                // authorization-code + PKCE flow) are redirected to the login page; API clients
+                // (Accept: anything but text/html) keep the resource-server default of 401 with
+                // WWW-Authenticate. Without this mapping the browser flow cannot start.
+                .exceptionHandling(exceptions -> exceptions.defaultAuthenticationEntryPointFor(
+                        new LoginUrlAuthenticationEntryPoint("/login"),
+                        browserRequestMatcher()))
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
 
         return http.build();
+    }
+
+    /**
+     * Matches requests whose {@code Accept} header signals a browser ({@code text/html}). A bare
+     * accept-anything header is ignored, so programmatic clients still receive the 401 bearer
+     * challenge instead of a login-page redirect.
+     */
+    private static RequestMatcher browserRequestMatcher() {
+        MediaTypeRequestMatcher browserMatcher = new MediaTypeRequestMatcher(MediaType.TEXT_HTML);
+        browserMatcher.setIgnoredMediaTypes(Set.of(MediaType.ALL));
+        return browserMatcher;
     }
 
     /**
@@ -188,19 +216,35 @@ public class AuthorizationServerConfig {
     }
 
     /**
-     * A demo registered client ({@code client}/{@code secret}) so the authorization server is
-     * usable without YAML. Backs off when Spring Boot's auto-configuration provides a
+     * Demo registered clients so the authorization server is usable without YAML:
+     * <ul>
+     *   <li>{@code client}/{@code secret} — a confidential client for the password /
+     *       client-credentials / refresh grants.</li>
+     *   <li>{@code pkce-client} — a <em>public</em> client (no secret) restricted to the
+     *       authorization-code grant with mandatory PKCE, demonstrating secret-free operation
+     *       for browser / SPA / mobile clients.</li>
+     * </ul>
+     * Backs off when Spring Boot's auto-configuration provides a
      * {@link RegisteredClientRepository} from {@code spring.security.oauth2.authorization-server.client.*}.
      */
     @Bean
     @ConditionalOnMissingBean(RegisteredClientRepository.class)
     public RegisteredClientRepository registeredClientRepository(PasswordEncoder passwordEncoder) {
-        RegisteredClient client = RegisteredClient.withId(UUID.randomUUID().toString())
+        return new InMemoryRegisteredClientRepository(
+                demoConfidentialClient(passwordEncoder), demoPkceClient());
+    }
+
+    /**
+     * A confidential demo client ({@code client}/{@code secret}) exercising the grants that
+     * authenticate with a client secret.
+     */
+    private static RegisteredClient demoConfidentialClient(PasswordEncoder passwordEncoder) {
+        return RegisteredClient.withId(UUID.randomUUID().toString())
                 .clientId("client")
                 .clientSecret(passwordEncoder.encode("secret"))
-                .authorizationGrantType(org.springframework.security.oauth2.core.AuthorizationGrantType.AUTHORIZATION_CODE)
-                .authorizationGrantType(org.springframework.security.oauth2.core.AuthorizationGrantType.REFRESH_TOKEN)
-                .authorizationGrantType(org.springframework.security.oauth2.core.AuthorizationGrantType.CLIENT_CREDENTIALS)
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
                 .authorizationGrantType(AuthConst.PASSWORD_GRANT_TYPE)
                 .redirectUri("http://127.0.0.1:8080/login/oauth2/code/client")
                 .tokenSettings(TokenSettings.builder()
@@ -211,7 +255,39 @@ public class AuthorizationServerConfig {
                 .scope("read")
                 .scope("write")
                 .build();
-        return new InMemoryRegisteredClientRepository(client);
+    }
+
+    /**
+     * A public demo client ({@code pkce-client}, no secret) for the authorization-code grant
+     * with PKCE (RFC 7636). It authenticates with {@link ClientAuthenticationMethod#NONE} —
+     * only its {@code client_id} is presented, never a secret — and
+     * {@link ClientSettings.Builder#requireProofKey(boolean) requireProofKey(true)} makes the
+     * authorization endpoint reject any request without a {@code code_challenge}, so a stolen
+     * authorization code cannot be redeemed without the verifier held by the original client.
+     *
+     * <p>The {@code refresh_token} grant is deliberately <em>not</em> registered: Spring
+     * Authorization Server refuses to issue refresh tokens to public clients on the
+     * authorization-code grant, because a bearer refresh token cannot be bound to a client
+     * that authenticates with {@code none} — whoever stole it could redeem it (RFC 6749
+     * §10.5). Confidential clients keep the grant; public clients that need renewal require
+     * sender-constrained refresh tokens (mTLS / DPoP or a custom {@code OAuth2TokenGenerator}).
+     */
+    private static RegisteredClient demoPkceClient() {
+        return RegisteredClient.withId(UUID.randomUUID().toString())
+                .clientId("pkce-client")
+                .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
+                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                .redirectUri("http://127.0.0.1:8080/login/oauth2/code/pkce-client")
+                .tokenSettings(TokenSettings.builder()
+                        .accessTokenTimeToLive(Duration.ofHours(1))
+                        .build())
+                .clientSettings(ClientSettings.builder()
+                        .requireProofKey(true)
+                        .requireAuthorizationConsent(false)
+                        .build())
+                .scope("read")
+                .scope("write")
+                .build();
     }
 
     /**
@@ -224,6 +300,16 @@ public class AuthorizationServerConfig {
      * ({@code resourceServerSecurityFilterChain}): Spring Security 7 rejects two
      * matches-any-request chains in one application ({@code UnreachableFilterChainException}),
      * so exactly one default chain may exist.
+     *
+     * <p>Sessions are {@link SessionCreationPolicy#IF_REQUIRED IF_REQUIRED} (not stateless)
+     * because the authorization-code + PKCE flow is a browser flow: the resource owner submits
+     * the login form on {@code POST /login} (this chain) and that authentication must live in
+     * the HTTP session until the authorization endpoint ({@code /oauth2/authorize}, the protocol
+     * chain) issues the code. With STATELESS the login would be forgotten between the two
+     * requests and the browser would bounce between {@code /login} and {@code /oauth2/authorize}
+     * forever. Bearer-token API traffic stays effectively stateless: under Spring Security's
+     * explicit-save semantics only interactive login (form / basic) persists a context, JWT
+     * bearer authentication does not.
      */
     @Bean
     @Order(2)
@@ -238,7 +324,7 @@ public class AuthorizationServerConfig {
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
                 .sessionManagement(session -> session.sessionCreationPolicy(
-                        org.springframework.security.config.http.SessionCreationPolicy.STATELESS))
+                        SessionCreationPolicy.IF_REQUIRED))
                 .formLogin(Customizer.withDefaults())
                 .httpBasic(Customizer.withDefaults());
         return http.build();

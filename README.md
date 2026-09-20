@@ -15,7 +15,7 @@ integrate-boot
 │   ├── integrate-boot-exception # Global exception handling: exception hierarchy + ResultInfo advice
 │   ├── integrate-boot-cache     # Local cache integration (Caffeine + Spring Cache)
 │   ├── integrate-boot-redis     # Redis integration (Redisson + Spring Data Redis)
-│   ├── integrate-boot-authentication # OAuth2 authorization server + password grant (optional)
+│   ├── integrate-boot-authentication # OAuth2 authorization server: auth code + PKCE, password grant (optional)
 │   ├── integrate-boot-resource-server # Bearer resource protection + token validation port (optional)
 │   ├── integrate-boot-scheduling # Distributed scheduling on XXL-JOB: @Job discovery + registry (opt-in)
 │   ├── integrate-boot-event     # In-process event bus: EventBus facade + async takeover (+ optional outbox)
@@ -714,11 +714,14 @@ does not aggregate it, so services without auth keep running unconstrained.
 - A full OAuth2 authorization server issuing **JWT** access tokens (RSA key pair generated at
   startup) and opaque refresh tokens, at the standard endpoints (`/oauth2/token`,
   `/oauth2/authorize`, `/oauth2/jwks`, ...)
-- Standard grants: `authorization_code`, `client_credentials`, `refresh_token`
+- Standard grants: `authorization_code` (with **PKCE**, RFC 7636), `client_credentials`,
+  `refresh_token`
 - A custom **`password` grant** (`grant_type=password`, username/password → token), re-added as a
   custom grant since OAuth 2.1 / Spring Authorization Server dropped it
 - A demo client (`client` / `secret`) and a demo user (`user` / `password`) so the server is
   usable before any configuration — override them with your own beans
+- A demo **public PKCE client** (`pkce-client`, no secret at all) so browser / SPA / mobile
+  clients can run the authorization-code flow without ever holding a client secret
 - JWT-based resource protection for the application's own endpoints (Bearer token in
   `Authorization` header), with the OAuth2 / actuator paths permitted
 
@@ -761,6 +764,51 @@ does not aggregate it, so services without auth keep running unconstrained.
 
    When this bean is present, the module's demo user backs off (`@ConditionalOnMissingBean`).
 
+### Authorization code + PKCE (recommended for human-facing clients)
+
+The `password` grant requires shipping a client secret (and the user's credentials) to the token
+endpoint. For browser, SPA and mobile clients the module ships a **public client** instead:
+`pkce-client` has no secret at all, is restricted to `authorization_code`, and has
+`requireProofKey(true)` so every authorization request must carry a PKCE `code_challenge`
+(RFC 7636). A leaked or intercepted authorization code is then worthless — only the holder of
+the one-time `code_verifier` can redeem it — which removes the need to expose a client secret
+on an untrusted device entirely.
+
+The whole flow with the zero-config demo client (`user` / `password`):
+
+```bash
+# 1. Client side: generate a code_verifier and its S256 code_challenge.
+VERIFIER=$(openssl rand -base64 32 | tr -d '=+/' | tr '+/' '-_')   # 43+ urlsafe chars
+CHALLENGE=$(printf %s "$VERIFIER" | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')
+
+# 2. Send the resource owner to the authorization endpoint (browser). They log in via
+#    the form-login page (demo user: user / password) and are redirected back with a code.
+#    In a browser this is simply a link; with curl you can watch the hops:
+curl -i "http://localhost:8080/oauth2/authorize?response_type=code&client_id=pkce-client\
+&redirect_uri=http://127.0.0.1:8080/login/oauth2/code/pkce-client&scope=read&state=xyz\
+&code_challenge=$CHALLENGE&code_challenge_method=S256"
+# -> 302 Location: /login   (unauthenticated browser request)
+# ... after login: 302 Location: http://127.0.0.1:8080/login/oauth2/code/pkce-client?code=<CODE>&state=xyz
+
+# 3. Redeem the code WITHOUT any client credentials — client_id + code_verifier only.
+curl -d "grant_type=authorization_code&client_id=pkce-client&code=<CODE>\
+&redirect_uri=http://127.0.0.1:8080/login/oauth2/code/pkce-client&code_verifier=$VERIFIER" \
+    http://localhost:8080/oauth2/token
+# -> {"access_token":"<JWT>","scope":"read","token_type":"Bearer","expires_in":3599}
+```
+
+Notes on the public client:
+
+- No refresh token is issued. Spring Authorization Server deliberately refuses to issue
+  refresh tokens to public clients on the `authorization_code` grant: a bearer refresh token
+  cannot be bound to a client that authenticates with `none`, so whoever stole it could redeem
+  it (RFC 6749 §10.5). A confidential client that also uses PKCE (defense in depth — PKCE works
+  there too and is transparently enforced whenever a `code_challenge` was sent) still receives
+  a refresh token as usual.
+- PKCE violations are enforced end to end: no `code_challenge` → the authorization endpoint
+  answers `error=invalid_request`; wrong or missing `code_verifier` at the token endpoint →
+  `invalid_grant` / `invalid_client`, and the one-time code is never reusable.
+
 ### Configure clients and issuer
 
 OAuth2 clients, the issuer and JWK are configured through Spring Boot's native properties — the
@@ -791,6 +839,32 @@ integrate-boot:
 Define your own `JWKSource<SecurityContext>` bean to load a fixed RSA key pair (instead of the
 auto-generated one) for production.
 
+To register your own PKCE **public client**, define a `RegisteredClientRepository` bean instead
+of (or in addition to) the YAML properties — Spring Boot's property mapping cannot express
+`require-proof-key`, so a secret-less client must be declared in code:
+
+```java
+@Bean
+public RegisteredClientRepository registeredClientRepository(PasswordEncoder encoder) {
+    RegisteredClient spa = RegisteredClient.withId(UUID.randomUUID().toString())
+            .clientId("my-spa")
+            .clientAuthenticationMethod(ClientAuthenticationMethod.NONE) // public: no secret
+            .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+            .redirectUri("https://spa.example.com/callback")
+            .clientSettings(ClientSettings.builder()
+                    .requireProofKey(true)               // PKCE mandatory for this client
+                    .requireAuthorizationConsent(false)
+                    .build())
+            .scope("read")
+            .build();
+    // ...register confidential clients as needed (they keep the refresh_token grant)
+    return new InMemoryRegisteredClientRepository(spa);
+}
+```
+
+Use `JdbcRegisteredClientRepository` / a Redis-backed implementation for multi-instance
+deployments, just like the authorization service.
+
 ### Multi-node deployment and key rotation
 
 The default RSA key pair is generated randomly once per process. It is convenient for local
@@ -814,9 +888,10 @@ key is unavailable rather than silently generating a temporary key.
 > `TokenValidationPort` implementation must validate against the issuer's shared public keys or a
 > centralized introspection service.
 
-> Note: the `password` grant carries the user's credentials to the token endpoint, so prefer
-> `authorization_code` + PKCE for human-facing clients. The password grant is provided mainly for
-> machine-to-machine and legacy-client compatibility.
+> Note: the `password` grant carries the user's credentials (and the client secret) to the token
+> endpoint, so prefer `authorization_code` + PKCE for human-facing clients — see
+> [Authorization code + PKCE](#authorization-code--pkce-recommended-for-human-facing-clients).
+> The password grant is provided mainly for machine-to-machine and legacy-client compatibility.
 
 ## integrate-boot-resource-server
 
