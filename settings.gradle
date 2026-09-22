@@ -13,6 +13,7 @@ include('module:integrate-boot-resource-server')
 include('module:integrate-boot-scheduling')
 include('module:integrate-boot-event')
 include('module:integrate-boot-oss')
+include('module:integrate-boot-lock')
 include('module:integrate-boot-starter')
 include('test:integrate-boot-test')
 

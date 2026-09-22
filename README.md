@@ -15,6 +15,7 @@ integrate-boot
 │   ├── integrate-boot-exception # Global exception handling: exception hierarchy + ResultInfo advice
 │   ├── integrate-boot-cache     # Local cache integration (Caffeine + Spring Cache)
 │   ├── integrate-boot-redis     # Redis integration (Redisson + Spring Data Redis)
+│   ├── integrate-boot-lock      # Distributed locking: DistributedLock facade + LockProvider SPI (Redis impl)
 │   ├── integrate-boot-authentication # OAuth2 authorization server: auth code + PKCE, password grant (optional)
 │   ├── integrate-boot-resource-server # Bearer resource protection + token validation port (optional)
 │   ├── integrate-boot-scheduling # Distributed scheduling on XXL-JOB: @Job discovery + registry (opt-in)
@@ -620,7 +621,10 @@ share the same Redis client and configuration — nothing extra is needed to kee
   date/time format), so cached objects restore their concrete types
 - Optional extra Redis instances under `integrate-boot.redis.multi.*`, each exposing its own
   `RedissonClient` / `RedisTemplate` / `StringRedisTemplate` beans (inject by name)
-- Distributed-lock / collection APIs directly from `RedissonClient` (`RLock`, `RMap`, `RBucket`, ...)
+- Distributed-lock / collection APIs directly from `RedissonClient` (`RLock`, `RMap`, `RBucket`, ...);
+  the lock half is also wrapped into the pluggable
+  [`DistributedLock`](#integrate-boot-lock) facade — a `RedissonLockProvider` is
+  auto-configured as soon as the client exists
 - A **Redis time source** for `DateUtils`: `RedisDateTimeService` (the Redis server clock,
   via the `TIME` command) is registered automatically whenever a Redis connection is
   configured — with both the redis and db sources present it is the preferred one
@@ -701,6 +705,65 @@ private RedissonClient sessionRedisson;
 A `multi` entry supports standalone (default), sentinel (`sentinel.master` + `sentinel.nodes`)
 and cluster (`cluster.nodes`) topologies, plus `username`, `password`, `database`, `timeout`
 and `ssl`. An empty / absent `multi` map (the default) means single-Redis mode.
+
+## integrate-boot-lock
+
+Distributed locking as a **definition module**: it owns the business-facing `DistributedLock`
+facade and the `LockProvider` SPI backends implement — and ships no backend itself. The Redis
+backend (`RedissonLockProvider`, built on Redisson's reentrant `RLock`) is contributed by
+`integrate-boot-redis`, so under the starter the facade is ready as soon as a Redis connection
+is configured. A service wanting a different backend registers its own `LockProvider` (or a
+whole `DistributedLock`) bean and the defaults back off — bean-driven activation, like object
+storage.
+
+### What you get out of the box
+
+- `DistributedLock` — `execute()` (acquire → run → guaranteed release, also on failure) and
+  `acquire()` (raw `LockHandle`, try-with-resources friendly)
+- Business keys only: every key is namespaced with `integrate-boot.lock.key-prefix`
+  (default `integrate-boot:lock:`), so lock keys never collide with other data in the store
+- Layer-wide defaults: `default-wait-time` (default `0s` — fail fast instead of blocking) and
+  `default-lease-time` (default unset — Redisson's watchdog renews the lock while the holder
+  lives and drops it when the JVM dies)
+- Error model through the shared exception hierarchy: contention → `LockNotAcquiredException`
+  (HTTP 409, retryable), backend failure → `LockException` (HTTP 500)
+
+### Usage
+
+Inject the facade and run actions under a lock:
+
+```java
+@Autowired
+private DistributedLock locks;
+
+// run under the lock; wait up to 2s for a concurrent holder, then give up (409):
+String token = locks.execute(LockRequest.builder()
+        .key("order:" + orderId)
+        .waitTime(Duration.ofSeconds(2))
+        .build(), () -> issueToken(orderId));
+
+// one-liner with all layer defaults (single best-effort attempt):
+locks.execute("report:monthly", this::render);
+
+// raw handle for spans execute() cannot express; released by try-with-resources:
+try (LockHandle handle = locks.acquire(LockRequest.of("batch:import"))) {
+    importBatch();
+}
+```
+
+### Configuration
+
+```yaml
+integrate-boot:
+  lock:
+    key-prefix: "myapp:lock:"   # default "integrate-boot:lock:" (empty disables namespacing)
+    default-wait-time: 2s       # default 0s — fail fast instead of blocking
+    default-lease-time: 30s     # default unset — backend decides (Redis: watchdog)
+```
+
+Semantics worth knowing (Redis backend): locks are reentrant per thread, and a `LockHandle`
+must be released by the thread that acquired it — exactly what `execute()` does. Releasing
+after the lease already expired is tolerated (reported at warn level, never thrown).
 
 ## integrate-boot-authentication
 

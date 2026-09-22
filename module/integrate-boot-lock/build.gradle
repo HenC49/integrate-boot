@@ -1,0 +1,27 @@
+plugins {
+    id 'java-library'
+}
+
+// Publish this module's jar + POM (see gradle/publishing.gradle).
+apply from: "$rootDir/gradle/publishing.gradle"
+
+dependencies {
+    // Use the project BOM as the single source of dependency versions.
+    api platform(project(':bom'))
+
+    // The lock exceptions extend the platform's BaseException hierarchy so the global
+    // handler renders them into the shared ResultInfo envelope (lock contention becomes
+    // a proper 409, backend failures a 500) without any per-app mapping. Brings the base
+    // entities and the web/validation stack transitively — the standard footprint of
+    // every integrate-boot service.
+    api project(':module:integrate-boot-exception')
+
+    // Auto-configuration support for the DistributedLock bean + properties binding.
+    api(libs.spring.boot.autoconfigure)
+
+    // Generates configuration property metadata so IDEs can auto-complete
+    // and document the properties consumed by this module.
+    annotationProcessor(libs.spring.boot.configuration.processor)
+
+    testImplementation(libs.spring.boot.starter.test)
+}

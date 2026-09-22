@@ -54,6 +54,12 @@ dependencies {
     // OssMetadataStore implementation.
     api project(':module:integrate-boot-oss')
 
+    // Aggregate distributed locking: the DistributedLock facade (execute / acquire) defined
+    // by the contract-only lock module, with the Redis-backed LockProvider arriving through
+    // integrate-boot-redis — so the facade activates as soon as a Redis connection is
+    // configured.
+    api project(':module:integrate-boot-lock')
+
     // The logging layer replaces Spring Boot's default Logback with Log4j2. Excluding
     // spring-boot-starter-logging here (the exclusion travels with the published POM)
     // keeps Logback off consumers' classpaths; the logging module's startup guard

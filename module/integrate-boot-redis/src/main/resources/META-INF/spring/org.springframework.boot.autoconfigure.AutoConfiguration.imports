@@ -1,2 +1,3 @@
 com.github.henc.integrateboot.redis.config.RedisAutoConfiguration
 com.github.henc.integrateboot.redis.datetime.DateTimeAutoConfiguration
+com.github.henc.integrateboot.redis.lock.RedissonLockAutoConfiguration
